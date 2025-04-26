@@ -3,8 +3,6 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { Button } from 'react-native-elements';
 import { getRandomQuestion, Question, Player } from '../services/supabase';
 import AdBanner from '../components/AdBanner';
-import { showInterstitialAd } from '../services/admob';
-import InterstitialAdButton from '../components/InterstitialAdButton';
 
 type GameScreenProps = {
   navigation: any;
@@ -179,17 +177,19 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation, route }) => {
             </View>
 
             <View style={styles.actionButtons}>
-              {/* Usar InterstitialAdButton para mostrar anuncios intersticiales */}
-              <InterstitialAdButton
-                text="Me Niego"
+              {/* Usar botones normales para no mostrar anuncios durante el juego */}
+              <Button
+                title="Me Niego"
                 onPress={handleRefuse}
-                style={[styles.button, styles.refuseButton]}
+                buttonStyle={[styles.button, styles.refuseButton]}
+                containerStyle={styles.actionButtonContainer}
               />
 
-              <InterstitialAdButton
-                text="Completado"
+              <Button
+                title="Completado"
                 onPress={handleComplete}
-                style={[styles.button, styles.completeButton]}
+                buttonStyle={[styles.button, styles.completeButton]}
+                containerStyle={styles.actionButtonContainer}
               />
             </View>
           </View>
@@ -327,6 +327,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     width: '100%',
+  },
+  actionButtonContainer: {
+    width: '48%',
   },
   refuseButton: {
     backgroundColor: '#ff9800',

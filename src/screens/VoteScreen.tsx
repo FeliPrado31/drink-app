@@ -13,6 +13,7 @@ import { Button } from 'react-native-elements';
 import { getSuggestions, voteSuggestion, Suggestion, getSettings } from '../services/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import AdBanner from '../components/AdBanner';
+import { showInterstitialAd } from '../services/admob';
 
 type VoteScreenProps = {
   navigation: any;
@@ -74,6 +75,14 @@ const VoteScreen: React.FC<VoteScreenProps> = ({ navigation }) => {
             : suggestion
         )
       );
+
+      // Mostrar anuncio intersticial después de votar
+      try {
+        await showInterstitialAd();
+      } catch (adError) {
+        console.error('Error al mostrar anuncio intersticial:', adError);
+        // Continuamos aunque falle el anuncio
+      }
 
       Alert.alert('Éxito', 'Tu voto ha sido registrado correctamente');
     } catch (err: any) {

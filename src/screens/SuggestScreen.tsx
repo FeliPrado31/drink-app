@@ -13,6 +13,7 @@ import { Button, Input } from 'react-native-elements';
 import { Picker } from '@react-native-picker/picker';
 import { createSuggestion, getGameModes, GameMode, getSettings } from '../services/supabase';
 import AdBanner from '../components/AdBanner';
+import { showInterstitialAd } from '../services/admob';
 
 type SuggestScreenProps = {
   navigation: any;
@@ -73,6 +74,14 @@ const SuggestScreen: React.FC<SuggestScreenProps> = ({ navigation }) => {
       const { suggestion, error } = await createSuggestion(content.trim(), type, modeId);
 
       if (error) throw error;
+
+      // Mostrar anuncio intersticial después de enviar la sugerencia
+      try {
+        await showInterstitialAd();
+      } catch (adError) {
+        console.error('Error al mostrar anuncio intersticial:', adError);
+        // Continuamos aunque falle el anuncio
+      }
 
       Alert.alert(
         'Sugerencia Enviada',
