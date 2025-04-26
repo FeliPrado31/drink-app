@@ -1,9 +1,20 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
-import { Button } from 'react-native-elements';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Alert,
+  StatusBar,
+  Animated,
+  Dimensions,
+  ScrollView
+} from 'react-native';
+import { Button, Icon } from 'react-native-elements';
 import { getRandomQuestion, Question, Player } from '../services/supabase';
 import { useAchievements } from '../context/AchievementsContext';
 import * as Location from 'expo-location';
+import { LinearGradient } from 'expo-linear-gradient';
 
 type GameScreenProps = {
   navigation: any;
@@ -33,6 +44,11 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation, route }) => {
     uniquePlayers: new Set(players.map(p => p.name))
   });
 
+  // Referencias para animaciones
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+
   // Acceder al contexto de logros
   const { trackAchievements, updateStats } = useAchievements();
 
@@ -42,6 +58,25 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation, route }) => {
   // Update current player when index changes
   useEffect(() => {
     setCurrentPlayer(players[currentPlayerIndex]);
+
+    // Animar la transición de jugador
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true
+      })
+    ]).start();
   }, [currentPlayerIndex, players]);
 
   // Verificar logros al montar el componente
@@ -143,8 +178,32 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation, route }) => {
         return;
       }
 
+      // Reiniciar animaciones antes de mostrar la nueva pregunta
+      fadeAnim.setValue(0);
+      scaleAnim.setValue(0.9);
+      slideAnim.setValue(50);
+
       setCurrentQuestion(question);
       setSelectedType(type || null);
+
+      // Animar la aparición de la pregunta
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 500,
+          useNativeDriver: true
+        })
+      ]).start();
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Failed to load question');
     } finally {
@@ -278,95 +337,222 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation, route }) => {
     );
   };
 
+  // Función para obtener un color basado en el género
+  const getGenderColor = (gender: 'male' | 'female' | 'other') => {
+    switch (gender) {
+      case 'male': return '#2196f3';
+      case 'female': return '#e91e63';
+      case 'other': return '#9c27b0';
+      default: return '#607d8b';
+    }
+  };
+
+  // Función para obtener un icono basado en el género
+  const getGenderIcon = (gender: 'male' | 'female' | 'other') => {
+    switch (gender) {
+      case 'male': return 'man';
+      case 'female': return 'woman';
+      case 'other': return 'person';
+      default: return 'person';
+    }
+  };
+
   return (
     <View style={styles.container}>
-      <View style={styles.contentContainer}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Modo {modeName}</Text>
+      <StatusBar barStyle="light-content" backgroundColor="#ff5722" />
+
+      {/* Header con gradiente */}
+      <LinearGradient
+        colors={['#ff5722', '#ff9800']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.header}
+      >
+        <Text style={styles.headerTitle}>Modo {modeName}</Text>
+
+        <Animated.View
+          style={[
+            styles.playerInfoContainer,
+            {
+              opacity: fadeAnim,
+              transform: [
+                { scale: scaleAnim },
+                { translateY: slideAnim }
+              ]
+            }
+          ]}
+        >
+          <View style={[styles.playerAvatar, { backgroundColor: getGenderColor(currentPlayer.gender) }]}>
+            <Icon
+              name={getGenderIcon(currentPlayer.gender)}
+              type="material"
+              size={24}
+              color="white"
+            />
+          </View>
           <View style={styles.playerInfo}>
-            <Text style={styles.currentPlayerText}>Jugador Actual:</Text>
+            <Text style={styles.playerLabel}>Turno de:</Text>
             <Text style={styles.playerName}>{currentPlayer.name}</Text>
           </View>
-        </View>
+        </Animated.View>
+      </LinearGradient>
 
+      <ScrollView
+        style={styles.scrollContent}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+      >
         {!currentQuestion ? (
-          <View style={styles.choiceContainer}>
+          <Animated.View
+            style={[
+              styles.choiceContainer,
+              {
+                opacity: fadeAnim,
+                transform: [
+                  { scale: scaleAnim },
+                  { translateY: slideAnim }
+                ]
+              }
+            ]}
+          >
             <Text style={styles.instructionText}>
               {currentPlayer.name}, elige tu destino:
             </Text>
 
             <View style={styles.buttonRow}>
-              <Button
-                title="Verdad"
+              <TouchableOpacity
+                style={[styles.choiceButton, styles.truthChoiceButton]}
                 onPress={handleTruth}
-                buttonStyle={[styles.button, styles.truthButton]}
-                containerStyle={styles.buttonContainer}
-                loading={loading}
-              />
+                disabled={loading}
+              >
+                <Icon name="question-answer" type="material" size={40} color="white" />
+                <Text style={styles.choiceButtonText}>Verdad</Text>
+              </TouchableOpacity>
 
-              <Button
-                title="Reto"
+              <TouchableOpacity
+                style={[styles.choiceButton, styles.dareChoiceButton]}
                 onPress={handleDare}
-                buttonStyle={[styles.button, styles.dareButton]}
-                containerStyle={styles.buttonContainer}
-                loading={loading}
-              />
+                disabled={loading}
+              >
+                <Icon name="local-fire-department" type="material" size={40} color="white" />
+                <Text style={styles.choiceButtonText}>Reto</Text>
+              </TouchableOpacity>
             </View>
 
-            <Button
-              title="Aleatorio"
+            <TouchableOpacity
+              style={[styles.choiceButton, styles.randomChoiceButton]}
               onPress={handleRandom}
-              buttonStyle={[styles.button, styles.randomButton]}
-              containerStyle={[styles.buttonContainer, styles.randomButtonContainer]}
-              loading={loading}
-            />
-          </View>
+              disabled={loading}
+            >
+              <Icon name="shuffle" type="material" size={30} color="white" />
+              <Text style={styles.choiceButtonText}>Aleatorio</Text>
+            </TouchableOpacity>
+
+            {loading && (
+              <View style={styles.loadingOverlay}>
+                <Text style={styles.loadingText}>Cargando...</Text>
+              </View>
+            )}
+          </Animated.View>
         ) : (
-          <View style={styles.questionContainer}>
-            <View style={[
-              styles.questionCard,
-              selectedType === 'truth' ? styles.truthCard : styles.dareCard
-            ]}>
-              <Text style={styles.questionType}>
-                {selectedType === 'truth' ? 'VERDAD' : 'RETO'}
-              </Text>
+          <Animated.View
+            style={[
+              styles.questionContainer,
+              {
+                opacity: fadeAnim,
+                transform: [
+                  { scale: scaleAnim },
+                  { translateY: slideAnim }
+                ]
+              }
+            ]}
+          >
+            <LinearGradient
+              colors={selectedType === 'truth' ?
+                ['#2196f3', '#03a9f4'] :
+                ['#f44336', '#ff5722']}
+              style={styles.questionCard}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={styles.questionTypeContainer}>
+                <Icon
+                  name={selectedType === 'truth' ? 'question-answer' : 'local-fire-department'}
+                  type="material"
+                  size={24}
+                  color="white"
+                />
+                <Text style={styles.questionType}>
+                  {selectedType === 'truth' ? 'VERDAD' : 'RETO'}
+                </Text>
+              </View>
               <Text style={styles.questionText}>{currentQuestion.content}</Text>
-            </View>
+            </LinearGradient>
 
             <View style={styles.actionButtons}>
-              {/* Usar botones normales para no mostrar anuncios durante el juego */}
-              <Button
-                title="Me Niego"
+              <TouchableOpacity
+                style={[styles.actionButton, styles.refuseButton]}
                 onPress={handleRefuse}
-                buttonStyle={[styles.button, styles.refuseButton]}
-                containerStyle={styles.actionButtonContainer}
-              />
+              >
+                <Icon name="close" type="material" size={24} color="white" />
+                <Text style={styles.actionButtonText}>
+                  Me Niego ({shotCount} {shotCount === 1 ? 'shot' : 'shots'})
+                </Text>
+              </TouchableOpacity>
 
-              <Button
-                title="Completado"
+              <TouchableOpacity
+                style={[styles.actionButton, styles.completeButton]}
                 onPress={handleComplete}
-                buttonStyle={[styles.button, styles.completeButton]}
-                containerStyle={styles.actionButtonContainer}
-              />
+              >
+                <Icon name="check" type="material" size={24} color="white" />
+                <Text style={styles.actionButtonText}>Completado</Text>
+              </TouchableOpacity>
             </View>
-          </View>
+          </Animated.View>
         )}
 
-        <View style={styles.footer}>
-          <Text style={styles.playersListText}>
-            Jugadores: {players.map((p, i) =>
-              `${p.name}${i < players.length - 1 ? ', ' : ''}`
-            )}
-          </Text>
-
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Text style={styles.backButtonText}>Volver a Jugadores</Text>
-          </TouchableOpacity>
+        {/* Información de jugadores */}
+        <View style={styles.playersListContainer}>
+          <Text style={styles.playersListTitle}>Jugadores:</Text>
+          <View style={styles.playersList}>
+            {players.map((player, index) => (
+              <View
+                key={player.id}
+                style={[
+                  styles.playerItem,
+                  currentPlayerIndex === index && styles.activePlayerItem
+                ]}
+              >
+                <View style={[styles.playerItemAvatar, { backgroundColor: getGenderColor(player.gender) }]}>
+                  <Icon
+                    name={getGenderIcon(player.gender)}
+                    type="material"
+                    size={16}
+                    color="white"
+                  />
+                </View>
+                <Text
+                  style={[
+                    styles.playerItemName,
+                    currentPlayerIndex === index && styles.activePlayerItemName
+                  ]}
+                >
+                  {player.name}
+                </Text>
+              </View>
+            ))}
+          </View>
         </View>
-      </View>
+
+        {/* Botón de volver */}
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Icon name="arrow-back" type="material" size={20} color="#ff5722" />
+          <Text style={styles.backButtonText}>Volver a Jugadores</Text>
+        </TouchableOpacity>
+      </ScrollView>
     </View>
   );
 };
@@ -376,50 +562,265 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
-  contentContainer: {
-    flex: 1,
-    padding: 20,
-  },
   header: {
-    marginBottom: 20,
+    paddingTop: StatusBar.currentHeight || 40,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
   },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  playerInfoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 12,
+    padding: 12,
+  },
+  playerAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  playerInfo: {
+    flex: 1,
+  },
+  playerLabel: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+  },
+  playerName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  scrollContent: {
+    flex: 1,
+  },
+  contentContainer: {
+    padding: 16,
+    paddingBottom: 24,
+  },
+  choiceContainer: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    alignItems: 'center',
+  },
+  instructionText: {
+    fontSize: 18,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginBottom: 24,
+    color: '#333',
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 16,
+  },
+  choiceButton: {
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  truthChoiceButton: {
+    backgroundColor: '#2196f3',
+    flex: 1,
+    marginRight: 8,
+    height: 120,
+  },
+  dareChoiceButton: {
+    backgroundColor: '#f44336',
+    flex: 1,
+    marginLeft: 8,
+    height: 120,
+  },
+  randomChoiceButton: {
+    backgroundColor: '#9c27b0',
+    width: '100%',
+    flexDirection: 'row',
+    height: 60,
+  },
+  choiceButtonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: 8,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 16,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 8,
+  },
+  questionContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+    width: '100%',
+  },
+  questionCard: {
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 5,
+  },
+  questionTypeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  questionType: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: 'white',
+    marginLeft: 8,
+  },
+  questionText: {
+    fontSize: 20,
+    lineHeight: 28,
+    color: 'white',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 12,
+    flex: 1,
+  },
+  actionButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  refuseButton: {
+    backgroundColor: '#f44336',
+    marginRight: 8,
+  },
+  completeButton: {
+    backgroundColor: '#4caf50',
+    marginLeft: 8,
+  },
+  playersListContainer: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  playersListTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 12,
+    color: '#333',
+  },
+  playersList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  playerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 20,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  activePlayerItem: {
+    backgroundColor: '#fff3e0',
+    borderWidth: 1,
+    borderColor: '#ff9800',
+  },
+  playerItemAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 6,
+  },
+  playerItemName: {
+    fontSize: 14,
+    color: '#666',
+  },
+  activePlayerItemName: {
+    color: '#ff5722',
+    fontWeight: 'bold',
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+  },
+  backButtonText: {
+    color: '#ff5722',
+    fontSize: 16,
+    marginLeft: 8,
+  },
+
+  // Mantener estilos antiguos para compatibilidad
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 10,
     textAlign: 'center',
   },
-  playerInfo: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
   currentPlayerText: {
     fontSize: 16,
     color: '#666',
     marginRight: 5,
-  },
-  playerName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#ff5722',
-  },
-  choiceContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  instructionText: {
-    fontSize: 20,
-    marginBottom: 30,
-    textAlign: 'center',
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-    marginBottom: 20,
   },
   buttonContainer: {
     width: '48%',
@@ -440,24 +841,6 @@ const styles = StyleSheet.create({
   randomButton: {
     backgroundColor: '#9c27b0',
   },
-  questionContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  questionCard: {
-    width: '100%',
-    backgroundColor: 'white',
-    borderRadius: 15,
-    padding: 20,
-    marginBottom: 30,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 5,
-    alignItems: 'center',
-  },
   truthCard: {
     borderColor: '#2196f3',
     borderWidth: 2,
@@ -466,30 +849,8 @@ const styles = StyleSheet.create({
     borderColor: '#f44336',
     borderWidth: 2,
   },
-  questionType: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    color: '#333',
-  },
-  questionText: {
-    fontSize: 22,
-    textAlign: 'center',
-    lineHeight: 30,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-  },
   actionButtonContainer: {
     width: '48%',
-  },
-  refuseButton: {
-    backgroundColor: '#ff9800',
-  },
-  completeButton: {
-    backgroundColor: '#4caf50',
   },
   footer: {
     marginTop: 20,
@@ -502,14 +863,6 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     marginBottom: 10,
-  },
-  backButton: {
-    padding: 10,
-    alignItems: 'center',
-  },
-  backButtonText: {
-    color: '#6200ee',
-    fontSize: 16,
   },
 });
 
