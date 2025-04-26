@@ -6,10 +6,13 @@ import {
   FlatList,
   TouchableOpacity,
   Alert,
-  ScrollView
+  ScrollView,
+  StatusBar,
+  Animated
 } from 'react-native';
-import { Button, Input } from 'react-native-elements';
+import { Button, Input, Icon } from 'react-native-elements';
 import { Player } from '../services/supabase';
+import { LinearGradient } from 'expo-linear-gradient';
 
 type PlayersScreenProps = {
   navigation: any;
@@ -77,85 +80,168 @@ const PlayersScreen: React.FC<PlayersScreenProps> = ({ navigation, route }) => {
     </TouchableOpacity>
   );
 
+  // Función para obtener un color basado en el género
+  const getGenderColor = (gender: 'male' | 'female' | 'other') => {
+    switch (gender) {
+      case 'male': return '#2196f3';
+      case 'female': return '#e91e63';
+      case 'other': return '#9c27b0';
+      default: return '#607d8b';
+    }
+  };
+
+  // Función para obtener un icono basado en el género
+  const getGenderIcon = (gender: 'male' | 'female' | 'other') => {
+    switch (gender) {
+      case 'male': return 'man';
+      case 'female': return 'woman';
+      case 'other': return 'person';
+      default: return 'person';
+    }
+  };
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Agregar Jugadores</Text>
-      <Text style={styles.subtitle}>Modo {modeName}</Text>
+      <StatusBar barStyle="light-content" backgroundColor="#ff5722" />
 
-      <View style={styles.addPlayerForm}>
-        <Input
-          placeholder="Nombre del Jugador"
-          value={currentName}
-          onChangeText={setCurrentName}
-          containerStyle={styles.inputContainer}
-          returnKeyType="done"
-          onSubmitEditing={addPlayer}
-        />
+      {/* Header con gradiente */}
+      <LinearGradient
+        colors={['#ff5722', '#ff9800']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.header}
+      >
+        <Text style={styles.headerTitle}>Agregar Jugadores</Text>
+        <Text style={styles.headerSubtitle}>Modo: {modeName}</Text>
+      </LinearGradient>
 
-        <View style={styles.genderSelector}>
-          <Text style={styles.genderLabel}>Género:</Text>
-          <View style={styles.genderButtons}>
-            {renderGenderButton('male', 'Hombre')}
-            {renderGenderButton('female', 'Mujer')}
-            {renderGenderButton('other', 'Otro')}
+      <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Formulario para agregar jugadores */}
+        <View style={styles.addPlayerForm}>
+          <Text style={styles.formTitle}>Nuevo Jugador</Text>
+
+          <Input
+            placeholder="Nombre del Jugador"
+            value={currentName}
+            onChangeText={setCurrentName}
+            containerStyle={styles.inputContainer}
+            inputContainerStyle={styles.inputField}
+            leftIcon={{ type: 'material', name: 'person', color: '#ff5722' }}
+            returnKeyType="done"
+            onSubmitEditing={addPlayer}
+          />
+
+          <View style={styles.genderSelector}>
+            <Text style={styles.genderLabel}>Género:</Text>
+            <View style={styles.genderButtons}>
+              {renderGenderButton('male', 'Hombre')}
+              {renderGenderButton('female', 'Mujer')}
+              {renderGenderButton('other', 'Otro')}
+            </View>
           </View>
+
+          <Button
+            title="Agregar Jugador"
+            onPress={addPlayer}
+            buttonStyle={styles.addButton}
+            containerStyle={styles.addButtonContainer}
+            icon={{
+              name: 'person-add',
+              type: 'material',
+              size: 20,
+              color: 'white',
+            }}
+            iconRight
+          />
         </View>
 
-        <Button
-          title="Agregar Jugador"
-          onPress={addPlayer}
-          buttonStyle={styles.addButton}
-        />
-      </View>
+        {/* Lista de jugadores */}
+        <View style={styles.playerListContainer}>
+          <View style={styles.playerListHeader}>
+            <Text style={styles.playersTitle}>
+              Jugadores ({players.length})
+            </Text>
+            <Text style={styles.playerMinimum}>
+              Mínimo: 2 jugadores
+            </Text>
+          </View>
 
-      <View style={styles.playerListContainer}>
-        <Text style={styles.playersTitle}>
-          Jugadores ({players.length})
-        </Text>
-
-        {players.length > 0 ? (
-          <FlatList
-            data={players}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <View style={styles.playerItem}>
-                <View style={styles.playerInfo}>
-                  <Text style={styles.playerName}>{item.name}</Text>
-                  <Text style={styles.playerGender}>
-                    {item.gender === 'male' ? 'Hombre' : item.gender === 'female' ? 'Mujer' : 'Otro'}
-                  </Text>
+          {players.length > 0 ? (
+            <FlatList
+              data={players}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <View style={styles.playerItem}>
+                  <View style={[styles.playerAvatar, { backgroundColor: getGenderColor(item.gender) }]}>
+                    <Icon
+                      name={getGenderIcon(item.gender)}
+                      type="material"
+                      size={20}
+                      color="white"
+                    />
+                  </View>
+                  <View style={styles.playerInfo}>
+                    <Text style={styles.playerName}>{item.name}</Text>
+                    <Text style={styles.playerGender}>
+                      {item.gender === 'male' ? 'Hombre' : item.gender === 'female' ? 'Mujer' : 'Otro'}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => removePlayer(item.id)}
+                    style={styles.removeButton}
+                  >
+                    <Icon name="close" type="material" size={16} color="white" />
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity
-                  onPress={() => removePlayer(item.id)}
-                  style={styles.removeButton}
-                >
-                  <Text style={styles.removeButtonText}>✕</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-            style={styles.playerList}
-          />
-        ) : (
-          <Text style={styles.noPlayersText}>
-            No hay jugadores añadidos. Agrega al menos 2 jugadores para comenzar.
-          </Text>
-        )}
-      </View>
+              )}
+              style={styles.playerList}
+              scrollEnabled={false}
+            />
+          ) : (
+            <View style={styles.noPlayersContainer}>
+              <Icon name="people" type="material" size={40} color="#ddd" />
+              <Text style={styles.noPlayersText}>
+                No hay jugadores añadidos. Agrega al menos 2 jugadores para comenzar.
+              </Text>
+            </View>
+          )}
+        </View>
 
-      <View style={styles.buttonsContainer}>
-        <Button
-          title="Iniciar Juego"
-          onPress={startGame}
-          buttonStyle={[styles.button, styles.startButton]}
-          disabled={players.length < 2}
-        />
-        <Button
-          title="Volver"
-          onPress={() => navigation.goBack()}
-          buttonStyle={[styles.button, styles.backButton]}
-          type="outline"
-        />
-      </View>
+        {/* Botones de acción */}
+        <View style={styles.buttonsContainer}>
+          <Button
+            title="Iniciar Juego"
+            onPress={startGame}
+            buttonStyle={[styles.button, styles.startButton]}
+            containerStyle={styles.startButtonContainer}
+            disabled={players.length < 2}
+            disabledStyle={styles.disabledButton}
+            icon={{
+              name: 'play-arrow',
+              type: 'material',
+              size: 20,
+              color: 'white',
+            }}
+            iconRight
+          />
+          <Button
+            title="Volver"
+            onPress={() => navigation.goBack()}
+            buttonStyle={[styles.button, styles.backButton]}
+            containerStyle={styles.backButtonContainer}
+            type="outline"
+            icon={{
+              name: 'arrow-back',
+              type: 'material',
+              size: 20,
+              color: '#ff5722',
+            }}
+          />
+        </View>
+
+        {/* Espacio adicional al final */}
+        <View style={styles.bottomPadding} />
+      </ScrollView>
     </View>
   );
 };
@@ -163,37 +249,53 @@ const PlayersScreen: React.FC<PlayersScreenProps> = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
     backgroundColor: '#f5f5f5',
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 5,
+  header: {
+    paddingTop: StatusBar.currentHeight || 40,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
   },
-  subtitle: {
-    fontSize: 18,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 20,
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.8)',
+  },
+  scrollContent: {
+    flex: 1,
+    padding: 16,
   },
   addPlayerForm: {
     backgroundColor: 'white',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 20,
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 5,
+    shadowRadius: 4,
     elevation: 3,
+  },
+  formTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    color: '#333',
   },
   inputContainer: {
     paddingHorizontal: 0,
+    marginBottom: 8,
+  },
+  inputField: {
+    borderBottomColor: '#ddd',
   },
   genderSelector: {
-    marginBottom: 15,
+    marginBottom: 16,
   },
   genderLabel: {
     fontSize: 16,
@@ -209,13 +311,13 @@ const styles = StyleSheet.create({
     padding: 10,
     borderWidth: 1,
     borderColor: '#ddd',
-    borderRadius: 5,
-    marginHorizontal: 5,
+    borderRadius: 8,
+    marginHorizontal: 4,
     alignItems: 'center',
   },
   selectedGenderButton: {
-    backgroundColor: '#6200ee',
-    borderColor: '#6200ee',
+    backgroundColor: '#ff5722',
+    borderColor: '#ff5722',
   },
   genderButtonText: {
     color: '#333',
@@ -223,36 +325,59 @@ const styles = StyleSheet.create({
   selectedGenderButtonText: {
     color: 'white',
   },
+  addButtonContainer: {
+    marginTop: 8,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
   addButton: {
     backgroundColor: '#4caf50',
-    borderRadius: 5,
+    borderRadius: 8,
+    paddingVertical: 12,
   },
   playerListContainer: {
-    flex: 1,
     backgroundColor: 'white',
-    borderRadius: 10,
-    padding: 15,
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 5,
+    shadowRadius: 4,
     elevation: 3,
+  },
+  playerListHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   playersTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 15,
+    color: '#333',
+  },
+  playerMinimum: {
+    fontSize: 14,
+    color: '#666',
   },
   playerList: {
-    flex: 1,
+    marginBottom: 8,
   },
   playerItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
+  },
+  playerAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
   playerInfo: {
     flex: 1,
@@ -260,6 +385,7 @@ const styles = StyleSheet.create({
   playerName: {
     fontSize: 16,
     fontWeight: 'bold',
+    color: '#333',
   },
   playerGender: {
     fontSize: 14,
@@ -267,36 +393,51 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   removeButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: '#f44336',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  removeButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: 'bold',
+  noPlayersContainer: {
+    alignItems: 'center',
+    padding: 20,
   },
   noPlayersText: {
     textAlign: 'center',
     color: '#666',
-    marginTop: 20,
+    marginTop: 12,
+    lineHeight: 20,
   },
   buttonsContainer: {
-    marginTop: 20,
+    marginBottom: 16,
+  },
+  startButtonContainer: {
+    marginBottom: 12,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  backButtonContainer: {
+    borderRadius: 8,
+    overflow: 'hidden',
   },
   button: {
-    borderRadius: 5,
-    marginBottom: 10,
     paddingVertical: 12,
   },
   startButton: {
     backgroundColor: '#ff5722',
+    borderRadius: 8,
   },
   backButton: {
-    borderColor: '#6200ee',
+    borderColor: '#ff5722',
+    borderRadius: 8,
+  },
+  disabledButton: {
+    backgroundColor: '#cccccc',
+  },
+  bottomPadding: {
+    height: 20,
   },
 });
 

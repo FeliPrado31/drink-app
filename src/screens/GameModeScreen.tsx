@@ -1,6 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, FlatList, TouchableOpacity } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ActivityIndicator,
+  FlatList,
+  TouchableOpacity,
+  StatusBar,
+  Image
+} from 'react-native';
+import { Icon } from 'react-native-elements';
 import { getGameModes, GameMode } from '../services/supabase';
+import { LinearGradient } from 'expo-linear-gradient';
 
 type GameModeScreenProps = {
   navigation: any;
@@ -36,42 +47,94 @@ const GameModeScreen: React.FC<GameModeScreenProps> = ({ navigation }) => {
     navigation.navigate('Players', { modeId: mode.id, modeName: mode.name });
   };
 
-  if (loading) {
-    return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#ff5722" />
-      </View>
-    );
-  }
+  // Función para obtener un color basado en el ID del modo
+  const getModeColor = (id: number) => {
+    const colors = ['#ff5722', '#ff9800', '#4caf50', '#2196f3', '#9c27b0', '#607d8b'];
+    return colors[id % colors.length];
+  };
 
-  if (error) {
-    return (
-      <View style={styles.centerContainer}>
-        <Text style={styles.errorText}>{error}</Text>
-      </View>
-    );
-  }
+  // Función para obtener un icono basado en el nombre del modo
+  const getModeIcon = (name: string) => {
+    const nameLower = name.toLowerCase();
+    if (nameLower.includes('casual')) return 'mood';
+    if (nameLower.includes('extremo')) return 'whatshot';
+    if (nameLower.includes('erotic') || nameLower.includes('erótico')) return 'favorite';
+    if (nameLower.includes('fiesta')) return 'celebration';
+    return 'local-bar';
+  };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Selecciona el Modo de Juego</Text>
+      <StatusBar barStyle="light-content" backgroundColor="#ff5722" />
 
-      <FlatList
-        data={modes}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item }) => (
+      {/* Header con gradiente */}
+      <LinearGradient
+        colors={['#ff5722', '#ff9800']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.header}
+      >
+        <Text style={styles.headerTitle}>Selecciona el Modo</Text>
+        <Text style={styles.headerSubtitle}>Elige cómo quieres jugar</Text>
+      </LinearGradient>
+
+      {loading ? (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#ff5722" />
+          <Text style={styles.loadingText}>Cargando modos de juego...</Text>
+        </View>
+      ) : error ? (
+        <View style={styles.centerContainer}>
+          <Icon name="error-outline" type="material" size={60} color="#f44336" />
+          <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity
-            style={styles.modeCard}
-            onPress={() => handleSelectMode(item)}
+            style={styles.retryButton}
+            onPress={() => navigation.goBack()}
           >
-            <Text style={styles.modeName}>{item.name}</Text>
-            {item.description && (
-              <Text style={styles.modeDescription}>{item.description}</Text>
-            )}
+            <Text style={styles.retryButtonText}>Volver</Text>
           </TouchableOpacity>
-        )}
-        contentContainerStyle={styles.listContainer}
-      />
+        </View>
+      ) : (
+        <FlatList
+          data={modes}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.modeCard}
+              onPress={() => handleSelectMode(item)}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={[getModeColor(item.id), getModeColor(item.id) + '80']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.modeIconContainer}
+              >
+                <Icon
+                  name={getModeIcon(item.name)}
+                  type="material"
+                  size={30}
+                  color="white"
+                />
+              </LinearGradient>
+              <View style={styles.modeTextContainer}>
+                <Text style={styles.modeName}>{item.name}</Text>
+                {item.description && (
+                  <Text style={styles.modeDescription}>{item.description}</Text>
+                )}
+              </View>
+              <Icon
+                name="chevron-right"
+                type="material"
+                size={24}
+                color="#bbb"
+              />
+            </TouchableOpacity>
+          )}
+          contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
     </View>
   );
 };
@@ -79,49 +142,90 @@ const GameModeScreen: React.FC<GameModeScreenProps> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
     backgroundColor: '#f5f5f5',
+  },
+  header: {
+    paddingTop: StatusBar.currentHeight || 40,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.8)',
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#f5f5f5',
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
   },
   listContainer: {
-    paddingBottom: 20,
+    padding: 16,
+    paddingTop: 8,
   },
   modeCard: {
     backgroundColor: 'white',
-    borderRadius: 10,
-    padding: 20,
-    marginBottom: 15,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 5,
+    shadowRadius: 4,
     elevation: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  modeIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  modeTextContainer: {
+    flex: 1,
   },
   modeName: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 5,
+    marginBottom: 4,
+    color: '#333',
   },
   modeDescription: {
     fontSize: 14,
     color: '#666',
   },
   errorText: {
-    color: 'red',
+    color: '#f44336',
     fontSize: 16,
     textAlign: 'center',
+    marginTop: 16,
+    marginBottom: 24,
+    paddingHorizontal: 20,
+  },
+  retryButton: {
+    backgroundColor: '#ff5722',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '500',
   },
 });
 

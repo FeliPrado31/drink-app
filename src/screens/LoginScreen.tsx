@@ -1,7 +1,20 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Alert, TouchableOpacity, Text } from 'react-native';
-import { Input, Button } from 'react-native-elements';
+import {
+  View,
+  StyleSheet,
+  Alert,
+  TouchableOpacity,
+  Text,
+  ImageBackground,
+  StatusBar,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Dimensions
+} from 'react-native';
+import { Input, Button, Icon } from 'react-native-elements';
 import { signInWithEmail, signUpWithEmail } from '../services/supabase';
+import { LinearGradient } from 'expo-linear-gradient';
 
 type LoginScreenProps = {
   navigation: any;
@@ -51,45 +64,86 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.formContainer}>
-        <Text style={styles.title}>{isLogin ? 'Iniciar Sesión' : 'Registrarse'}</Text>
+      <StatusBar barStyle="light-content" backgroundColor="#ff5722" />
 
-        <Input
-          placeholder="Email"
-          leftIcon={{ type: 'material', name: 'email' }}
-          onChangeText={setEmail}
-          value={email}
-          autoCapitalize="none"
-          keyboardType="email-address"
+      {/* Fondo con gradiente */}
+      <LinearGradient
+        colors={['#ff5722', '#ff9800']}
+        style={styles.background}
+      />
+
+      {/* Logo y título */}
+      <View style={styles.headerContainer}>
+        <Icon
+          name="local-bar"
+          type="material"
+          size={80}
+          color="white"
+          containerStyle={styles.logoContainer}
         />
-
-        <Input
-          placeholder="Contraseña"
-          leftIcon={{ type: 'material', name: 'lock' }}
-          onChangeText={setPassword}
-          value={password}
-          secureTextEntry
-          autoCapitalize="none"
-        />
-
-        <Button
-          title={isLogin ? 'Iniciar Sesión' : 'Registrarse'}
-          onPress={handleAuth}
-          loading={loading}
-          buttonStyle={styles.button}
-        />
-
-        <TouchableOpacity
-          onPress={() => setIsLogin(!isLogin)}
-          style={styles.switchContainer}
-        >
-          <Text style={styles.switchText}>
-            {isLogin
-              ? "¿No tienes cuenta? Regístrate"
-              : '¿Ya tienes cuenta? Inicia Sesión'}
-          </Text>
-        </TouchableOpacity>
+        <Text style={styles.appTitle}>Drink App</Text>
+        <Text style={styles.appSubtitle}>El juego para tus fiestas</Text>
       </View>
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardContainer}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContainer}>
+          <View style={styles.formContainer}>
+            <Text style={styles.title}>{isLogin ? 'Iniciar Sesión' : 'Registrarse'}</Text>
+
+            <Input
+              placeholder="Email"
+              leftIcon={{ type: 'material', name: 'email', color: '#ff5722' }}
+              onChangeText={setEmail}
+              value={email}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              inputContainerStyle={styles.inputContainer}
+              containerStyle={styles.inputWrapper}
+            />
+
+            <Input
+              placeholder="Contraseña"
+              leftIcon={{ type: 'material', name: 'lock', color: '#ff5722' }}
+              onChangeText={setPassword}
+              value={password}
+              secureTextEntry
+              autoCapitalize="none"
+              inputContainerStyle={styles.inputContainer}
+              containerStyle={styles.inputWrapper}
+            />
+
+            <Button
+              title={isLogin ? 'Iniciar Sesión' : 'Registrarse'}
+              onPress={handleAuth}
+              loading={loading}
+              loadingProps={{ color: 'white' }}
+              buttonStyle={styles.button}
+              containerStyle={styles.buttonContainer}
+              icon={{
+                name: isLogin ? 'login' : 'person-add',
+                type: 'material',
+                size: 20,
+                color: 'white',
+              }}
+              iconRight
+            />
+
+            <TouchableOpacity
+              onPress={() => setIsLogin(!isLogin)}
+              style={styles.switchContainer}
+            >
+              <Text style={styles.switchText}>
+                {isLogin
+                  ? "¿No tienes cuenta? Regístrate"
+                  : '¿Ya tienes cuenta? Inicia Sesión'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 };
@@ -98,37 +152,88 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  background: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    height: Dimensions.get('window').height,
+  },
+  headerContainer: {
+    alignItems: 'center',
+    paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 40 : 60,
+    paddingBottom: 30,
+  },
+  logoContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  appTitle: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 8,
+  },
+  appSubtitle: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.8)',
+  },
+  keyboardContainer: {
+    flex: 1,
+  },
+  scrollContainer: {
+    flexGrow: 1,
     justifyContent: 'center',
     padding: 20,
   },
   formContainer: {
     backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 10,
+    padding: 24,
+    borderRadius: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 8,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 20,
+    marginBottom: 24,
     textAlign: 'center',
+    color: '#333',
+  },
+  inputWrapper: {
+    marginBottom: 8,
+  },
+  inputContainer: {
+    borderBottomColor: '#ddd',
+    borderBottomWidth: 1,
+  },
+  buttonContainer: {
+    marginTop: 16,
+    borderRadius: 8,
+    overflow: 'hidden',
   },
   button: {
-    backgroundColor: '#6200ee',
-    borderRadius: 5,
-    marginTop: 10,
+    backgroundColor: '#ff5722',
+    borderRadius: 8,
+    paddingVertical: 12,
   },
   switchContainer: {
-    marginTop: 20,
+    marginTop: 24,
     alignItems: 'center',
   },
   switchText: {
-    color: '#6200ee',
+    color: '#ff5722',
     fontSize: 16,
+    fontWeight: '500',
   },
 });
 
