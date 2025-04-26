@@ -3,7 +3,21 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { Provider as PaperProvider } from 'react-native-paper';
+import 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { LogBox } from 'react-native';
+import { supabase } from './src/services/supabase';
+import ErrorBoundary from './src/components/ErrorBoundary';
+
+// Ignorar advertencias específicas
+LogBox.ignoreLogs([
+  'Reanimated 3',
+  'VirtualizedLists should never be nested',
+  'ViewPropTypes will be removed from React Native',
+  'NativeEventEmitter',
+]);
 
 // Import screens
 import LoginScreen from './src/screens/LoginScreen';
@@ -14,141 +28,154 @@ import GameScreen from './src/screens/GameScreen';
 import SuggestScreen from './src/screens/SuggestScreen';
 import VoteScreen from './src/screens/VoteScreen';
 import AchievementsScreen from './src/screens/AchievementsScreen';
+import LevelScreen from './src/screens/LevelScreen';
+import RankingScreen from './src/screens/RankingScreen';
+import StatsScreen from './src/screens/StatsScreen';
 
-// Import context
+// Import contexts
 import { AchievementsProvider } from './src/context/AchievementsContext';
+import { LevelProvider } from './src/context/LevelContext';
 
 // Create stack navigator
 const Stack = createNativeStackNavigator();
 
-// Error boundary componentred
-const ErrorDisplay = ({ error }: { error: Error }) => (
-  <View style={styles.errorContainer}>
-    <Text style={styles.errorTitle}>An error occurred</Text>
-    <Text style={styles.errorMessage}>{error.message}</Text>
-  </View>
-);
-
 export default function App() {
-  const [error, setError] = useState<Error | null>(null);
+  const [key, setKey] = useState(0);
 
-  // Global error handler
+  // Función para reiniciar la aplicación en caso de error
+  const handleReset = () => {
+    setKey(prevKey => prevKey + 1);
+  };
+
+  // Suscribirse a cambios de autenticación
   useEffect(() => {
-    const handleError = (error: Error) => {
-      console.error('Global error caught:', error);
-      setError(error);
-    };
-
-    // Set up global error handler
-    const originalErrorHandler = ErrorUtils.getGlobalHandler();
-    ErrorUtils.setGlobalHandler((e, isFatal) => {
-      handleError(e);
-      originalErrorHandler(e, isFatal);
-    });
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (event) => {
+        if (event === 'SIGNED_OUT') {
+          // Reiniciar la aplicación si el usuario cierra sesión
+          handleReset();
+        }
+      }
+    );
 
     return () => {
-      // Restore original handler on cleanup
-      ErrorUtils.setGlobalHandler(originalErrorHandler);
+      // Limpiar suscripción de autenticación
+      authListener.subscription.unsubscribe();
     };
   }, []);
 
-  // If there's an error, show the error screen
-  if (error) {
-    return <ErrorDisplay error={error} />;
-  }
-
   // Normal app rendering
   return (
-    <SafeAreaProvider>
-      <AchievementsProvider>
-        <NavigationContainer>
-          <Stack.Navigator initialRouteName="Login">
-            <Stack.Screen
-              name="Login"
-              component={LoginScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="Home"
-              component={HomeScreen}
-              options={{
-                title: 'Drink App',
-                headerBackVisible: false,
-              }}
-            />
-            <Stack.Screen
-              name="GameMode"
-              component={GameModeScreen}
-              options={{
-                title: 'Seleccionar Modo',
-                headerBackTitle: 'Inicio',
-              }}
-            />
-            <Stack.Screen
-              name="Players"
-              component={PlayersScreen}
-              options={{
-                title: 'Agregar Jugadores',
-                headerBackTitle: 'Modos',
-              }}
-            />
-            <Stack.Screen
-              name="Game"
-              component={GameScreen}
-              options={({ route }: any) => ({
-                title: route.params?.modeName ? `Modo ${route.params.modeName}` : 'Juego',
-                headerBackTitle: 'Jugadores',
-              })}
-            />
-            <Stack.Screen
-              name="Suggest"
-              component={SuggestScreen}
-              options={{
-                title: 'Sugerir Pregunta/Reto',
-                headerBackTitle: 'Inicio',
-              }}
-            />
-            <Stack.Screen
-              name="Vote"
-              component={VoteScreen}
-              options={{
-                title: 'Votar Sugerencias',
-                headerBackTitle: 'Inicio',
-              }}
-            />
-            <Stack.Screen
-              name="Achievements"
-              component={AchievementsScreen}
-              options={{
-                title: 'Mis Logros',
-                headerBackTitle: 'Inicio',
-              }}
-            />
-          </Stack.Navigator>
-          <StatusBar style="auto" />
-        </NavigationContainer>
-      </AchievementsProvider>
-    </SafeAreaProvider>
+    <ErrorBoundary onReset={handleReset}>
+      <GestureHandlerRootView style={{ flex: 1 }} key={key}>
+        <SafeAreaProvider>
+          <PaperProvider>
+            <AchievementsProvider>
+              <LevelProvider>
+                <NavigationContainer>
+                  <Stack.Navigator initialRouteName="Login">
+                <Stack.Screen
+                  name="Login"
+                  component={LoginScreen}
+                  options={{ headerShown: false }}
+                />
+                <Stack.Screen
+                  name="Home"
+                  component={HomeScreen}
+                  options={{
+                    title: 'Drink App',
+                    headerBackVisible: false,
+                  }}
+                />
+                <Stack.Screen
+                  name="GameMode"
+                  component={GameModeScreen}
+                  options={{
+                    title: 'Seleccionar Modo',
+                    headerBackTitle: 'Inicio',
+                  }}
+                />
+                <Stack.Screen
+                  name="Players"
+                  component={PlayersScreen}
+                  options={{
+                    title: 'Agregar Jugadores',
+                    headerBackTitle: 'Modos',
+                  }}
+                />
+                <Stack.Screen
+                  name="Game"
+                  component={GameScreen}
+                  options={({ route }: any) => ({
+                    title: route.params?.modeName ? `Modo ${route.params.modeName}` : 'Juego',
+                    headerBackTitle: 'Jugadores',
+                  })}
+                />
+                <Stack.Screen
+                  name="Suggest"
+                  component={SuggestScreen}
+                  options={{
+                    title: 'Sugerir Pregunta/Reto',
+                    headerBackTitle: 'Inicio',
+                  }}
+                />
+                <Stack.Screen
+                  name="Vote"
+                  component={VoteScreen}
+                  options={{
+                    title: 'Votar Sugerencias',
+                    headerBackTitle: 'Inicio',
+                  }}
+                />
+                <Stack.Screen
+                  name="Achievements"
+                  component={AchievementsScreen}
+                  options={{
+                    title: 'Mis Logros',
+                    headerBackTitle: 'Inicio',
+                  }}
+                />
+                <Stack.Screen
+                  name="Level"
+                  component={LevelScreen}
+                  options={{
+                    title: 'Mi Nivel',
+                    headerBackTitle: 'Inicio',
+                  }}
+                />
+                <Stack.Screen
+                  name="Ranking"
+                  component={RankingScreen}
+                  options={{
+                    title: 'Ranking Global',
+                    headerBackTitle: 'Nivel',
+                  }}
+                />
+                <Stack.Screen
+                  name="Stats"
+                  component={StatsScreen}
+                  options={{
+                    title: 'Estadísticas',
+                    headerBackTitle: 'Inicio',
+                  }}
+                />
+              </Stack.Navigator>
+                <StatusBar style="auto" />
+              </NavigationContainer>
+            </LevelProvider>
+          </AchievementsProvider>
+        </PaperProvider>
+      </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }
 
 const styles = StyleSheet.create({
-  errorContainer: {
+  container: {
     flex: 1,
-    justifyContent: 'center',
+    backgroundColor: '#fff',
     alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#f8f8f8',
-  },
-  errorTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#e53935',
-  },
-  errorMessage: {
-    fontSize: 16,
-    textAlign: 'center',
-    color: '#333',
+    justifyContent: 'center',
   },
 });

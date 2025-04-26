@@ -80,6 +80,16 @@ export const signOut = async () => {
 
 export const getCurrentUser = async () => {
   const { data, error } = await supabase.auth.getUser();
+
+  // Asegurarse de que el email esté disponible
+  if (data.user && !data.user.email) {
+    // Si no hay email, intentar obtenerlo de la sesión
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData.session?.user?.email) {
+      data.user.email = sessionData.session.user.email;
+    }
+  }
+
   return { user: data.user, error };
 };
 

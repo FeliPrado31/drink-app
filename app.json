@@ -51,6 +51,9 @@
     },
     "assetBundlePatterns": [
       "**/*"
+    ],
+    "plugins": [
+      "react-native-reanimated"
     ]
   }
 }

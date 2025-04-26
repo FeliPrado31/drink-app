@@ -98,22 +98,42 @@ export const AchievementsProvider: React.FC<AchievementsProviderProps> = ({ chil
 
   const trackAchievements = async (updates: AchievementUpdate[]) => {
     try {
-      const { unlockedAchievements } = await checkMultipleAchievements(updates);
+      console.log('Intentando actualizar logros:', updates);
+
+      // Asegurarse de que los logros estén inicializados antes de actualizarlos
+      await initializeUserAchievements();
+
+      const { unlockedAchievements, results } = await checkMultipleAchievements(updates);
+
+      console.log('Resultados de actualización de logros:', results);
 
       // Si se desbloqueó algún logro, mostrar notificación
       if (unlockedAchievements.length > 0) {
+        console.log('¡Logros desbloqueados!', unlockedAchievements);
+
         // Buscar los detalles del primer logro desbloqueado
         const unlockedCode = unlockedAchievements[0].code;
-        const achievement = userAchievements.find(
+
+        // Obtener los logros actualizados directamente de la base de datos
+        const { userAchievements: updatedAchievements } = await getUserAchievements(true);
+
+        const achievement = updatedAchievements.find(
           ua => ua.achievement?.code === unlockedCode
         )?.achievement;
 
         if (achievement) {
+          console.log('Mostrando notificación para logro:', achievement.name);
           setUnlockedAchievement(achievement);
 
           // Actualizar la lista de logros
           await fetchAchievements();
+        } else {
+          console.error('No se encontró el logro desbloqueado en la lista actualizada');
         }
+      } else {
+        console.log('No se desbloquearon nuevos logros, pero se actualizó el progreso');
+        // Actualizar la lista de logros de todos modos para reflejar el progreso
+        await fetchAchievements();
       }
     } catch (err: any) {
       console.error('Error al actualizar logros:', err);
