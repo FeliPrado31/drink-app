@@ -37,3 +37,6 @@ yarn-error.*
 .env
 ~/.android/adb_usb.ini
 setup-android.sh
+
+/android
+/ios

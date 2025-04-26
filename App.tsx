@@ -4,7 +4,6 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, Text, StyleSheet } from 'react-native';
-import { initializeAdMob } from './src/services/admob';
 
 // Import screens
 import LoginScreen from './src/screens/LoginScreen';
@@ -14,6 +13,10 @@ import PlayersScreen from './src/screens/PlayersScreen';
 import GameScreen from './src/screens/GameScreen';
 import SuggestScreen from './src/screens/SuggestScreen';
 import VoteScreen from './src/screens/VoteScreen';
+import AchievementsScreen from './src/screens/AchievementsScreen';
+
+// Import context
+import { AchievementsProvider } from './src/context/AchievementsContext';
 
 // Create stack navigator
 const Stack = createNativeStackNavigator();
@@ -28,26 +31,6 @@ const ErrorDisplay = ({ error }: { error: Error }) => (
 
 export default function App() {
   const [error, setError] = useState<Error | null>(null);
-
-  // Initialize AdMob
-  useEffect(() => {
-    const setupAdMob = async () => {
-      try {
-        // Inicializar AdMob con los IDs reales
-        const success = await initializeAdMob();
-        if (success) {
-          console.log('AdMob initialized successfully');
-        } else {
-          console.warn('AdMob initialization returned false');
-        }
-      } catch (error) {
-        console.error('AdMob initialization failed:', error);
-      }
-    };
-
-    // Ejecutar la inicialización cuando la aplicación esté lista
-    setupAdMob();
-  }, []);
 
   // Global error handler
   useEffect(() => {
@@ -77,64 +60,74 @@ export default function App() {
   // Normal app rendering
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
-        <Stack.Navigator initialRouteName="Login">
-          <Stack.Screen
-            name="Login"
-            component={LoginScreen}
-            options={{ headerShown: false }}
-          />
-          <Stack.Screen
-            name="Home"
-            component={HomeScreen}
-            options={{
-              title: 'Drink App',
-              headerBackVisible: false,
-            }}
-          />
-          <Stack.Screen
-            name="GameMode"
-            component={GameModeScreen}
-            options={{
-              title: 'Seleccionar Modo',
-              headerBackTitle: 'Inicio',
-            }}
-          />
-          <Stack.Screen
-            name="Players"
-            component={PlayersScreen}
-            options={{
-              title: 'Agregar Jugadores',
-              headerBackTitle: 'Modos',
-            }}
-          />
-          <Stack.Screen
-            name="Game"
-            component={GameScreen}
-            options={({ route }: any) => ({
-              title: route.params?.modeName ? `Modo ${route.params.modeName}` : 'Juego',
-              headerBackTitle: 'Jugadores',
-            })}
-          />
-          <Stack.Screen
-            name="Suggest"
-            component={SuggestScreen}
-            options={{
-              title: 'Sugerir Pregunta/Reto',
-              headerBackTitle: 'Inicio',
-            }}
-          />
-          <Stack.Screen
-            name="Vote"
-            component={VoteScreen}
-            options={{
-              title: 'Votar Sugerencias',
-              headerBackTitle: 'Inicio',
-            }}
-          />
-        </Stack.Navigator>
-        <StatusBar style="auto" />
-      </NavigationContainer>
+      <AchievementsProvider>
+        <NavigationContainer>
+          <Stack.Navigator initialRouteName="Login">
+            <Stack.Screen
+              name="Login"
+              component={LoginScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="Home"
+              component={HomeScreen}
+              options={{
+                title: 'Drink App',
+                headerBackVisible: false,
+              }}
+            />
+            <Stack.Screen
+              name="GameMode"
+              component={GameModeScreen}
+              options={{
+                title: 'Seleccionar Modo',
+                headerBackTitle: 'Inicio',
+              }}
+            />
+            <Stack.Screen
+              name="Players"
+              component={PlayersScreen}
+              options={{
+                title: 'Agregar Jugadores',
+                headerBackTitle: 'Modos',
+              }}
+            />
+            <Stack.Screen
+              name="Game"
+              component={GameScreen}
+              options={({ route }: any) => ({
+                title: route.params?.modeName ? `Modo ${route.params.modeName}` : 'Juego',
+                headerBackTitle: 'Jugadores',
+              })}
+            />
+            <Stack.Screen
+              name="Suggest"
+              component={SuggestScreen}
+              options={{
+                title: 'Sugerir Pregunta/Reto',
+                headerBackTitle: 'Inicio',
+              }}
+            />
+            <Stack.Screen
+              name="Vote"
+              component={VoteScreen}
+              options={{
+                title: 'Votar Sugerencias',
+                headerBackTitle: 'Inicio',
+              }}
+            />
+            <Stack.Screen
+              name="Achievements"
+              component={AchievementsScreen}
+              options={{
+                title: 'Mis Logros',
+                headerBackTitle: 'Inicio',
+              }}
+            />
+          </Stack.Navigator>
+          <StatusBar style="auto" />
+        </NavigationContainer>
+      </AchievementsProvider>
     </SafeAreaProvider>
   );
 }

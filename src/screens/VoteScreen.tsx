@@ -12,8 +12,7 @@ import {
 import { Button } from 'react-native-elements';
 import { getSuggestions, voteSuggestion, Suggestion, getSettings } from '../services/supabase';
 import { Ionicons } from '@expo/vector-icons';
-import AdBanner from '../components/AdBanner';
-import { showInterstitialAd } from '../services/admob';
+import { useAchievements } from '../context/AchievementsContext';
 
 type VoteScreenProps = {
   navigation: any;
@@ -24,6 +23,10 @@ const VoteScreen: React.FC<VoteScreenProps> = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [minVotes, setMinVotes] = useState<number>(5);
+  const [voteCount, setVoteCount] = useState<number>(0);
+
+  // Acceder al contexto de logros
+  const { trackAchievements, updateStats } = useAchievements();
 
   const fetchData = async () => {
     try {
@@ -63,6 +66,25 @@ const VoteScreen: React.FC<VoteScreenProps> = ({ navigation }) => {
 
       if (error) throw error;
 
+      // Incrementar contador de votos
+      setVoteCount(prev => prev + 1);
+
+      // Registrar logro de votante
+      trackAchievements([{ code: 'voter' }]);
+
+      // Actualizar estadísticas
+      updateStats({ votes_given: 1 });
+
+      // Verificar si la sugerencia alcanzó los votos necesarios para ser aprobada
+      const suggestion = suggestions.find(s => s.id === suggestionId);
+      if (suggestion && suggestion.votes_count + 1 >= minVotes) {
+        // Si la sugerencia será aprobada, registrar logro de influencer
+        trackAchievements([{ code: 'suggestion_approved' }]);
+
+        // Actualizar estadísticas de sugerencias aprobadas
+        updateStats({ suggestions_approved: 1 });
+      }
+
       // Update the local state to reflect the vote
       setSuggestions(prevSuggestions =>
         prevSuggestions.map(suggestion =>
@@ -75,14 +97,6 @@ const VoteScreen: React.FC<VoteScreenProps> = ({ navigation }) => {
             : suggestion
         )
       );
-
-      // Mostrar anuncio intersticial después de votar
-      try {
-        await showInterstitialAd();
-      } catch (adError) {
-        console.error('Error al mostrar anuncio intersticial:', adError);
-        // Continuamos aunque falle el anuncio
-      }
 
       Alert.alert('Éxito', 'Tu voto ha sido registrado correctamente');
     } catch (err: any) {
@@ -206,9 +220,6 @@ const VoteScreen: React.FC<VoteScreenProps> = ({ navigation }) => {
           />
         </View>
       </View>
-
-      {/* Banner de anuncios en la parte inferior */}
-      <AdBanner />
     </View>
   );
 };

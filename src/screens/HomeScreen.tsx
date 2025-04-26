@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Button } from 'react-native-elements';
 import { getCurrentUser, signOut } from '../services/supabase';
-import AdBanner from '../components/AdBanner';
+import { useAchievements } from '../context/AchievementsContext';
 
 type HomeScreenProps = {
   navigation: any;
@@ -10,6 +10,7 @@ type HomeScreenProps = {
 
 const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const { refreshAchievements } = useAchievements();
 
   useEffect(() => {
     // Get current user when component mounts
@@ -17,6 +18,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       const { user, error } = await getCurrentUser();
       if (user) {
         setUserEmail(user.email);
+        // Inicializar logros cuando el usuario inicia sesión
+        await refreshAchievements();
       }
     };
 
@@ -41,6 +44,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
   const handleVote = () => {
     navigation.navigate('Vote');
+  };
+
+  const handleAchievements = () => {
+    navigation.navigate('Achievements');
   };
 
   return (
@@ -88,6 +95,20 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             }}
             iconRight
           />
+
+          <Button
+            title="Mis Logros"
+            onPress={handleAchievements}
+            buttonStyle={[styles.button, styles.achievementsButton]}
+            containerStyle={styles.buttonContainer}
+            icon={{
+              name: 'emoji-events',
+              type: 'material',
+              size: 20,
+              color: 'white',
+            }}
+            iconRight
+          />
         </View>
 
         <Button
@@ -98,9 +119,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           type="outline"
         />
       </View>
-
-      {/* Banner de anuncios en la parte inferior */}
-      <AdBanner />
     </View>
   );
 };
@@ -160,6 +178,9 @@ const styles = StyleSheet.create({
   },
   voteButton: {
     backgroundColor: '#2196f3',
+  },
+  achievementsButton: {
+    backgroundColor: '#ff9800',
   },
   signOutContainer: {
     marginTop: 20,

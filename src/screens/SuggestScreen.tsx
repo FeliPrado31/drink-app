@@ -12,8 +12,7 @@ import {
 import { Button, Input } from 'react-native-elements';
 import { Picker } from '@react-native-picker/picker';
 import { createSuggestion, getGameModes, GameMode, getSettings } from '../services/supabase';
-import AdBanner from '../components/AdBanner';
-import { showInterstitialAd } from '../services/admob';
+import { useAchievements } from '../context/AchievementsContext';
 
 type SuggestScreenProps = {
   navigation: any;
@@ -27,6 +26,9 @@ const SuggestScreen: React.FC<SuggestScreenProps> = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [minVotes, setMinVotes] = useState<string>('5');
+
+  // Acceder al contexto de logros
+  const { trackAchievements, updateStats } = useAchievements();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -75,13 +77,11 @@ const SuggestScreen: React.FC<SuggestScreenProps> = ({ navigation }) => {
 
       if (error) throw error;
 
-      // Mostrar anuncio intersticial después de enviar la sugerencia
-      try {
-        await showInterstitialAd();
-      } catch (adError) {
-        console.error('Error al mostrar anuncio intersticial:', adError);
-        // Continuamos aunque falle el anuncio
-      }
+      // Registrar logro de creador de contenido
+      trackAchievements([{ code: 'suggestion_creator' }]);
+
+      // Actualizar estadísticas
+      updateStats({ suggestions_created: 1 });
 
       Alert.alert(
         'Sugerencia Enviada',
@@ -173,9 +173,6 @@ const SuggestScreen: React.FC<SuggestScreenProps> = ({ navigation }) => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-
-      {/* Banner de anuncios en la parte inferior */}
-      <AdBanner />
     </View>
   );
 };

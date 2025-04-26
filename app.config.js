@@ -1,60 +1,30 @@
+// Importamos el archivo app.json para usar sus valores
+import appJson from './app.json';
+
+// Extendemos la configuración con valores adicionales
 export default {
+  ...appJson.expo,
   name: "Drink App",
   slug: "drink-app",
-  version: "1.0.0",
-  orientation: "portrait",
-  // Comentamos estas líneas para evitar errores ya que no tenemos estos archivos
-  // icon: "./assets/icon.png",
-  // splash: {
-  //   image: "./assets/splash.png",
-  //   resizeMode: "contain",
-  //   backgroundColor: "#ffffff"
-  // },
-  updates: {
-    fallbackToCacheTimeout: 0
-  },
-  assetBundlePatterns: [
-    "**/*"
-  ],
   ios: {
-    supportsTablet: true,
-    bundleIdentifier: "com.feli.drinkapp",
-    // Configuración de AdMob para iOS
-    config: {
-      googleMobileAdsAppId: "ca-app-pub-7275388055615808~3583010996" // ID real de AdMob para iOS
-    }
+    ...appJson.expo.ios,
+    bundleIdentifier: "com.feli.drinkapp"
   },
   android: {
-    // adaptiveIcon: {
-    //   foregroundImage: "./assets/adaptive-icon.png",
-    //   backgroundColor: "#FFFFFF"
-    // },
+    ...appJson.expo.android,
     package: "com.feli.drinkapp",
-    // Configuración de AdMob para Android
-    config: {
-      googleMobileAdsAppId: "ca-app-pub-7275388055615808~3583010996" // ID real de AdMob para Android
-    },
     permissions: [
       "INTERNET",
       "ACCESS_NETWORK_STATE"
     ]
   },
-  web: {
-    // favicon: "./assets/favicon.png"
-  },
   plugins: [
-    [
-      "expo-ads-admob",
-      {
-        "userTrackingPermission": "Esta aplicación utiliza tecnología de publicidad que recopila información sobre tu dispositivo para mostrarte anuncios relevantes."
-      }
-    ]
   ],
   extra: {
     eas: {
-      projectId: "your-project-id"
-    }
-  },
-  // Habilitar la nueva arquitectura para mejor compatibilidad
-  newArchEnabled: true
+      projectId: "b6fd68ed-36e0-470b-aa93-117898c5a164"
+    },
+    supabaseUrl: "https://ldhlwodndotijyeysibl.supabase.co",
+    supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxkaGx3b2RuZG90aWp5ZXlzaWJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU2MjQ1MDUsImV4cCI6MjA2MTIwMDUwNX0.oxkkZ42hW-0jbHt2muePWUAPhv6Ooq10VsD30ONCP2Q"
+  }
 };
