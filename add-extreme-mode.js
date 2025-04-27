@@ -1,9 +1,16 @@
 // Script para agregar el modo de juego "Extremo" y sus preguntas/retos
+require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 
 // Initialize Supabase client
-const supabaseUrl = 'https://ldhlwodndotijyeysibl.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxkaGx3b2RuZG90aWp5ZXlzaWJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU2MjQ1MDUsImV4cCI6MjA2MTIwMDUwNX0.oxkkZ42hW-0jbHt2muePWUAPhv6Ooq10VsD30ONCP2Q';
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+
+// Verificar que las variables de entorno estén definidas
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('Error: Variables de entorno SUPABASE_URL y SUPABASE_ANON_KEY deben estar definidas');
+  process.exit(1);
+}
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 

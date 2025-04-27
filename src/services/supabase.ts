@@ -1,18 +1,32 @@
 import { createClient } from '@supabase/supabase-js';
 import 'react-native-url-polyfill/auto';
+import Constants from 'expo-constants';
 
 // Initialize Supabase client
-const supabaseUrl = 'https://ldhlwodndotijyeysibl.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxkaGx3b2RuZG90aWp5ZXlzaWJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU2MjQ1MDUsImV4cCI6MjA2MTIwMDUwNX0.oxkkZ42hW-0jbHt2muePWUAPhv6Ooq10VsD30ONCP2Q';
+const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl || '';
+const supabaseAnonKey = Constants.expoConfig?.extra?.supabaseAnonKey || '';
 
-// Add options for mobile environments
+// Add optimized options for mobile environments
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     detectSessionInUrl: false, // Disable auto-detection of OAuth grants in URL for mobile
     autoRefreshToken: true,
-    debug: __DEV__, // Enable debug logs in development
-  }
+    debug: false, // Disable debug logs even in development to reduce noise
+    flowType: 'implicit', // Use implicit flow for better mobile performance
+    // Set a longer storage key refresh time to reduce frequent checks
+    storageKey: 'supabase-auth-token',
+  },
+  // Global settings to improve performance
+  global: {
+    headers: { 'X-Client-Info': 'drink-app-mobile' },
+  },
+  // Reduce realtime subscription noise
+  realtime: {
+    params: {
+      eventsPerSecond: 1,
+    },
+  },
 });
 
 // Types for game data
@@ -56,41 +70,114 @@ export type Settings = {
 
 // Authentication functions
 export const signUpWithEmail = async (email: string, password: string) => {
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-  });
+  try {
+    // Validar el email y la contraseña
+    if (!email || !password) {
+      return {
+        data: null,
+        error: new Error('El email y la contraseña son obligatorios')
+      };
+    }
 
-  return { data, error };
+    // Validar formato de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return {
+        data: null,
+        error: new Error('El formato del email no es válido')
+      };
+    }
+
+    // Validar longitud de contraseña
+    if (password.length < 6) {
+      return {
+        data: null,
+        error: new Error('La contraseña debe tener al menos 6 caracteres')
+      };
+    }
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+    });
+
+    return { data, error };
+  } catch (error) {
+    console.error('Error en signUpWithEmail:', error);
+    return {
+      data: null,
+      error: new Error('Error al registrarse. Por favor, inténtalo de nuevo.')
+    };
+  }
 };
 
 export const signInWithEmail = async (email: string, password: string) => {
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
+  try {
+    // Validar el email y la contraseña
+    if (!email || !password) {
+      return {
+        data: null,
+        error: new Error('El email y la contraseña son obligatorios')
+      };
+    }
 
-  return { data, error };
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    return { data, error };
+  } catch (error) {
+    console.error('Error en signInWithEmail:', error);
+    return {
+      data: null,
+      error: new Error('Error al iniciar sesión. Por favor, inténtalo de nuevo.')
+    };
+  }
 };
 
 export const signOut = async () => {
-  const { error } = await supabase.auth.signOut();
-  return { error };
+  try {
+    const { error } = await supabase.auth.signOut();
+    return { error };
+  } catch (error) {
+    console.error('Error en signOut:', error);
+    return {
+      error: new Error('Error al cerrar sesión. Por favor, inténtalo de nuevo.')
+    };
+  }
 };
 
 export const getCurrentUser = async () => {
-  const { data, error } = await supabase.auth.getUser();
+  try {
+    const { data, error } = await supabase.auth.getUser();
 
-  // Asegurarse de que el email esté disponible
-  if (data.user && !data.user.email) {
-    // Si no hay email, intentar obtenerlo de la sesión
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (sessionData.session?.user?.email) {
-      data.user.email = sessionData.session.user.email;
+    if (error) {
+      return { user: null, error };
     }
-  }
 
-  return { user: data.user, error };
+    // Asegurarse de que el email esté disponible
+    if (data.user && !data.user.email) {
+      try {
+        // Si no hay email, intentar obtenerlo de la sesión
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData.session?.user?.email) {
+          data.user.email = sessionData.session.user.email;
+        }
+      } catch (sessionError) {
+        console.error('Error al obtener la sesión:', sessionError);
+        // Continuar aunque no se pueda obtener el email
+      }
+    }
+
+    return { user: data.user, error: null };
+  } catch (error) {
+    console.error('Error en getCurrentUser:', error);
+    return {
+      user: null,
+      error: new Error('Error al obtener el usuario actual. Por favor, inténtalo de nuevo.')
+    };
+  }
 };
 
 // Game functions

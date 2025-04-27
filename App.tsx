@@ -35,6 +35,7 @@ import StatsScreen from './src/screens/StatsScreen';
 // Import contexts
 import { AchievementsProvider } from './src/context/AchievementsContext';
 import { LevelProvider } from './src/context/LevelContext';
+import { AuthProvider } from './src/context/AuthContext';
 
 // Create stack navigator
 const Stack = createNativeStackNavigator();
@@ -47,22 +48,8 @@ export default function App() {
     setKey(prevKey => prevKey + 1);
   };
 
-  // Suscribirse a cambios de autenticación
-  useEffect(() => {
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (event) => {
-        if (event === 'SIGNED_OUT') {
-          // Reiniciar la aplicación si el usuario cierra sesión
-          handleReset();
-        }
-      }
-    );
-
-    return () => {
-      // Limpiar suscripción de autenticación
-      authListener.subscription.unsubscribe();
-    };
-  }, []);
+  // Ya no necesitamos suscribirnos a cambios de autenticación aquí
+  // porque lo manejamos en el AuthProvider
 
   // Normal app rendering
   return (
@@ -70,9 +57,10 @@ export default function App() {
       <GestureHandlerRootView style={{ flex: 1 }} key={key}>
         <SafeAreaProvider>
           <PaperProvider>
-            <AchievementsProvider>
-              <LevelProvider>
-                <NavigationContainer>
+            <AuthProvider>
+              <AchievementsProvider>
+                <LevelProvider>
+                  <NavigationContainer>
                   <Stack.Navigator initialRouteName="Login">
                 <Stack.Screen
                   name="Login"
@@ -162,10 +150,11 @@ export default function App() {
               </Stack.Navigator>
                 <StatusBar style="auto" />
               </NavigationContainer>
-            </LevelProvider>
-          </AchievementsProvider>
-        </PaperProvider>
-      </SafeAreaProvider>
+                </LevelProvider>
+              </AchievementsProvider>
+            </AuthProvider>
+          </PaperProvider>
+        </SafeAreaProvider>
       </GestureHandlerRootView>
     </ErrorBoundary>
   );

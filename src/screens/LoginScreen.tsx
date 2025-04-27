@@ -1,20 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
   Alert,
   TouchableOpacity,
   Text,
-  ImageBackground,
   StatusBar,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Dimensions
+  Dimensions,
+  ActivityIndicator
 } from 'react-native';
 import { Input, Button, Icon } from 'react-native-elements';
-import { signInWithEmail, signUpWithEmail } from '../services/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useAuth } from '../context/AuthContext';
 
 type LoginScreenProps = {
   navigation: any;
@@ -23,8 +23,22 @@ type LoginScreenProps = {
 const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
   const [isLogin, setIsLogin] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+
+  // Usar el contexto de autenticación optimizado
+  const { signIn, signUp, loading, user } = useAuth();
+
+  // Verificar si el usuario ya está autenticado
+  useEffect(() => {
+    // Si hay un usuario autenticado, navegar a Home
+    if (user) {
+      navigation.navigate('Home');
+    }
+
+    // Finalizar la carga inicial
+    setInitialLoading(false);
+  }, [user, navigation]);
 
   const handleAuth = async () => {
     if (!email || !password) {
@@ -32,20 +46,17 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
       return;
     }
 
-    setLoading(true);
-
     try {
       if (isLogin) {
-        // Manejar inicio de sesión
-        const { data, error } = await signInWithEmail(email, password);
+        // Manejar inicio de sesión con el nuevo contexto
+        const { error } = await signIn(email, password);
 
         if (error) throw error;
 
-        // Navegar a la pantalla Home al iniciar sesión correctamente
-        navigation.navigate('Home');
+        // La navegación se maneja en el useEffect cuando cambia el usuario
       } else {
-        // Manejar registro
-        const { data, error } = await signUpWithEmail(email, password);
+        // Manejar registro con el nuevo contexto
+        const { error } = await signUp(email, password);
 
         if (error) throw error;
 
@@ -57,8 +68,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
       }
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Ha ocurrido un error');
-    } finally {
-      setLoading(false);
     }
   };
 
