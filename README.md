@@ -40,17 +40,25 @@ PATH=$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$
 
 #### 2. Despliegue con EAS (Expo Application Services)
 
-Para despliegues con EAS, las variables de entorno se gestionan de forma segura a través de EAS Secrets:
+Para despliegues con EAS, las variables de entorno se gestionan de forma segura a través de EAS Secrets. Las variables ya están configuradas como secretas en EAS para todos los entornos (development, preview y production).
+
+Si necesitas actualizar estas variables, puedes usar los siguientes comandos:
 
 ```bash
 # Iniciar sesión en EAS (si aún no lo has hecho)
 eas login
 
-# Configurar la variable SUPABASE_ANON_KEY como secreto
-eas secret:create --scope project --name SUPABASE_ANON_KEY --value "tu_clave_anonima_real" --type string
+# Listar las variables de entorno existentes
+eas env:list production  # También puedes usar 'development' o 'preview'
+
+# Actualizar una variable existente
+eas env:update SUPABASE_URL --scope project --type string --secret
+
+# Crear una nueva variable secreta
+eas env:create --scope project --name NUEVA_VARIABLE --type string --secret
 ```
 
-Las variables de entorno ya están configuradas en el archivo `eas.json` para cada perfil de construcción.
+**Importante**: Las claves de Supabase están configuradas como secretas en EAS y no se pueden ver ni modificar desde la interfaz de usuario. Solo se pueden acceder durante el proceso de construcción en EAS.
 
 ### Instalación
 

@@ -102,7 +102,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Funciones de autenticación
   const signIn = async (email: string, password: string) => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      console.log('Intentando iniciar sesión con email:', email);
+      // No podemos acceder directamente a supabaseUrl, es una propiedad protegida
+
+      // Verificar si hay una sesión activa antes de intentar iniciar sesión
+      const { data: sessionData } = await supabase.auth.getSession();
+      console.log('Sesión actual antes de iniciar sesión:', sessionData.session ? 'Existe' : 'No existe');
+
+      // Intentar iniciar sesión
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
       if (error) {
         // Registrar el error detalladamente en la consola
         console.error('Error al iniciar sesión:', error);
@@ -111,11 +120,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           message: error.message,
           status: error.status
         });
+
+        // Mostrar el error completo para depuración
+        console.error('Error de inicio de sesión:', JSON.stringify(error));
+      } else {
+        console.log('Inicio de sesión exitoso. Usuario:', data.user?.email);
       }
+
       return { error };
     } catch (error) {
       // Registrar errores inesperados
       console.error('Error inesperado al iniciar sesión:', error);
+      console.error('Error de autenticación:', JSON.stringify(error));
       return { error };
     }
   };

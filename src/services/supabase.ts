@@ -6,13 +6,18 @@ import Constants from 'expo-constants';
 const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl || '';
 const supabaseAnonKey = Constants.expoConfig?.extra?.supabaseAnonKey || '';
 
+// Log Supabase configuration for debugging
+console.log('Supabase URL:', supabaseUrl);
+console.log('Supabase Anon Key length:', supabaseAnonKey ? supabaseAnonKey.length : 0);
+console.log('Supabase Anon Key first 10 chars:', supabaseAnonKey ? supabaseAnonKey.substring(0, 10) : 'none');
+
 // Add optimized options for mobile environments
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     detectSessionInUrl: false, // Disable auto-detection of OAuth grants in URL for mobile
     autoRefreshToken: true,
-    debug: false, // Disable debug logs even in development to reduce noise
+    debug: true, // Enable debug logs for troubleshooting
     flowType: 'implicit', // Use implicit flow for better mobile performance
     // Set a longer storage key refresh time to reduce frequent checks
     storageKey: 'supabase-auth-token',

@@ -46,28 +46,52 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
       return;
     }
 
+    console.log('Iniciando proceso de autenticación...');
+    console.log('Modo:', isLogin ? 'Inicio de sesión' : 'Registro');
+    console.log('Email:', email);
+
     try {
       if (isLogin) {
+        console.log('Intentando iniciar sesión...');
         // Manejar inicio de sesión con el nuevo contexto
         const { error } = await signIn(email, password);
 
         if (error) {
           // Registrar el error en la consola en lugar de mostrar un modal
           console.error('Error de inicio de sesión:', error.message || error);
+
+          // Mostrar un mensaje al usuario para mejor experiencia
+          Alert.alert(
+            'Error de inicio de sesión',
+            'No se pudo iniciar sesión. Por favor verifica tus credenciales o crea una cuenta si aún no tienes una.',
+            [{ text: 'OK' }]
+          );
+
           throw error;
         }
 
+        console.log('Inicio de sesión exitoso, esperando redirección...');
         // La navegación se maneja en el useEffect cuando cambia el usuario
       } else {
+        console.log('Intentando registrar nuevo usuario...');
         // Manejar registro con el nuevo contexto
         const { error } = await signUp(email, password);
 
         if (error) {
           // Registrar el error en la consola en lugar de mostrar un modal
           console.error('Error de registro:', error.message || error);
+
+          // Mostrar un mensaje al usuario para mejor experiencia
+          Alert.alert(
+            'Error de registro',
+            'No se pudo crear la cuenta. El email podría estar en uso o hay un problema con el servidor.',
+            [{ text: 'OK' }]
+          );
+
           throw error;
         }
 
+        console.log('Registro exitoso');
         Alert.alert(
           'Registro Exitoso',
           'Por favor revisa tu email para verificar tu cuenta y luego inicia sesión.',
@@ -77,6 +101,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
     } catch (error: any) {
       // Registrar el error en la consola
       console.error('Error de autenticación:', error.message || error);
+      console.error('Detalles completos del error:', JSON.stringify(error));
 
       // Mostrar un mensaje en la consola en lugar de un modal
       console.warn('Por favor revisa la consola para ver detalles del error de autenticación');

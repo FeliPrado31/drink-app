@@ -6,9 +6,9 @@ const getEnvVars = () => {
   // En desarrollo local, usamos valores por defecto o de process.env
   if (!process.env.EAS_BUILD) {
     return {
-      supabaseUrl: process.env.SUPABASE_URL || "https://tqheqenhhrurplpaewfm.supabase.co",
-      // Nota: En desarrollo local, debes configurar esta variable en tu entorno
-      supabaseAnonKey: process.env.SUPABASE_ANON_KEY || "REEMPLAZAR_CON_CLAVE_REAL_EN_DESARROLLO"
+      supabaseUrl: process.env.SUPABASE_URL || "",
+      // Usamos la clave anónima del archivo .env o .env.local
+      supabaseAnonKey: process.env.SUPABASE_ANON_KEY || ""
     };
   }
 

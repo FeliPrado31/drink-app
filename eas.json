@@ -7,10 +7,6 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "env": {
-        "SUPABASE_URL": "https://tqheqenhhrurplpaewfm.supabase.co",
-        "SUPABASE_ANON_KEY": "SUPABASE_ANON_KEY_PLACEHOLDER"
-      },
       "android": {
         "gradleCommand": ":app:assembleDebug"
       },
@@ -20,10 +16,6 @@
     },
     "preview": {
       "distribution": "internal",
-      "env": {
-        "SUPABASE_URL": "https://tqheqenhhrurplpaewfm.supabase.co",
-        "SUPABASE_ANON_KEY": "SUPABASE_ANON_KEY_PLACEHOLDER"
-      },
       "android": {
         "buildType": "apk",
         "gradleCommand": ":app:assembleRelease"
@@ -31,19 +23,11 @@
     },
     "production": {
       "autoIncrement": true,
-      "env": {
-        "SUPABASE_URL": "https://tqheqenhhrurplpaewfm.supabase.co",
-        "SUPABASE_ANON_KEY": "SUPABASE_ANON_KEY_PLACEHOLDER"
-      },
       "android": {
         "buildType": "app-bundle"
       }
     },
     "local": {
-      "env": {
-        "SUPABASE_URL": "https://tqheqenhhrurplpaewfm.supabase.co",
-        "SUPABASE_ANON_KEY": "SUPABASE_ANON_KEY_PLACEHOLDER"
-      },
       "android": {
         "buildType": "apk",
         "gradleCommand": ":app:assembleRelease",
