@@ -23,37 +23,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  
+
   // Usar una referencia para rastrear la última vez que se verificó la sesión
   const lastSessionCheckRef = useRef<number>(0);
-  
+
   // Función para verificar la sesión con limitación de frecuencia
   const checkSession = async (force = false) => {
     const now = Date.now();
-    
+
     // Si no es forzado y ha pasado menos tiempo que el intervalo mínimo, no verificar
     if (!force && now - lastSessionCheckRef.current < MIN_SESSION_CHECK_INTERVAL) {
       return;
     }
-    
+
     // Actualizar el tiempo de la última verificación
     lastSessionCheckRef.current = now;
-    
+
     try {
       const { data, error } = await supabase.auth.getSession();
-      
+
       if (error) {
         console.error('Error al verificar la sesión:', error);
         return;
       }
-      
+
       setSession(data.session);
       setUser(data.session?.user || null);
     } catch (error) {
       console.error('Error inesperado al verificar la sesión:', error);
     }
   };
-  
+
   // Función para refrescar la sesión manualmente
   const refreshSession = async () => {
     try {
@@ -63,28 +63,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
     }
   };
-  
+
   // Verificar la sesión al montar el componente
   useEffect(() => {
     const initializeAuth = async () => {
       setLoading(true);
-      
+
       try {
         // Verificar la sesión inicial
         await checkSession(true);
-        
+
         // Suscribirse a cambios de autenticación
         const { data: authListener } = supabase.auth.onAuthStateChange(
           async (event, newSession) => {
             console.log('Auth state changed:', event);
             setSession(newSession);
             setUser(newSession?.user || null);
-            
+
             // Actualizar el tiempo de la última verificación
             lastSessionCheckRef.current = Date.now();
           }
         );
-        
+
         return () => {
           // Limpiar la suscripción al desmontar
           authListener.subscription.unsubscribe();
@@ -95,41 +95,71 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLoading(false);
       }
     };
-    
+
     initializeAuth();
   }, []);
-  
+
   // Funciones de autenticación
   const signIn = async (email: string, password: string) => {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        // Registrar el error detalladamente en la consola
+        console.error('Error al iniciar sesión:', error);
+        console.error('Detalles del error:', {
+          code: error.code,
+          message: error.message,
+          status: error.status
+        });
+      }
       return { error };
     } catch (error) {
-      console.error('Error al iniciar sesión:', error);
+      // Registrar errores inesperados
+      console.error('Error inesperado al iniciar sesión:', error);
       return { error };
     }
   };
-  
+
   const signUp = async (email: string, password: string) => {
     try {
       const { error } = await supabase.auth.signUp({ email, password });
+      if (error) {
+        // Registrar el error detalladamente en la consola
+        console.error('Error al registrarse:', error);
+        console.error('Detalles del error:', {
+          code: error.code,
+          message: error.message,
+          status: error.status
+        });
+      }
       return { error };
     } catch (error) {
-      console.error('Error al registrarse:', error);
+      // Registrar errores inesperados
+      console.error('Error inesperado al registrarse:', error);
       return { error };
     }
   };
-  
+
   const signOutUser = async () => {
     try {
       const { error } = await supabase.auth.signOut();
+      if (error) {
+        // Registrar el error detalladamente en la consola
+        console.error('Error al cerrar sesión:', error);
+        console.error('Detalles del error:', {
+          code: error.code,
+          message: error.message,
+          status: error.status
+        });
+      }
       return { error };
     } catch (error) {
-      console.error('Error al cerrar sesión:', error);
+      // Registrar errores inesperados
+      console.error('Error inesperado al cerrar sesión:', error);
       return { error };
     }
   };
-  
+
   // Proporcionar el contexto
   return (
     <AuthContext.Provider
@@ -151,10 +181,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 // Hook personalizado para usar el contexto
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  
+
   if (context === undefined) {
     throw new Error('useAuth debe ser usado dentro de un AuthProvider');
   }
-  
+
   return context;
 };

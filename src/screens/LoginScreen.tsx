@@ -51,14 +51,22 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
         // Manejar inicio de sesión con el nuevo contexto
         const { error } = await signIn(email, password);
 
-        if (error) throw error;
+        if (error) {
+          // Registrar el error en la consola en lugar de mostrar un modal
+          console.error('Error de inicio de sesión:', error.message || error);
+          throw error;
+        }
 
         // La navegación se maneja en el useEffect cuando cambia el usuario
       } else {
         // Manejar registro con el nuevo contexto
         const { error } = await signUp(email, password);
 
-        if (error) throw error;
+        if (error) {
+          // Registrar el error en la consola en lugar de mostrar un modal
+          console.error('Error de registro:', error.message || error);
+          throw error;
+        }
 
         Alert.alert(
           'Registro Exitoso',
@@ -67,7 +75,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
         );
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Ha ocurrido un error');
+      // Registrar el error en la consola
+      console.error('Error de autenticación:', error.message || error);
+
+      // Mostrar un mensaje en la consola en lugar de un modal
+      console.warn('Por favor revisa la consola para ver detalles del error de autenticación');
     }
   };
 
