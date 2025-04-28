@@ -135,35 +135,102 @@ export const getUserLevel = async () => {
     }
 
     try {
-      // Crear registro de nivel para el usuario
-      const { data: newLevel, error: createError } = await supabase
+      // Verificar si ya existe un registro para este usuario
+      const { data: existingLevel, error: checkError } = await supabase
         .from('user_levels')
-        .insert({
-          user_id: user.id,
-          level: 1,
-          total_xp: 0,
-          next_level_xp: levelOne.xp_required,
-          level_definition_id: levelOne.id
-        })
-        .select('*')
-        .single();
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle();
 
-      if (createError) {
-        console.error('Error al crear nivel de usuario:', createError);
-        // Devolver un nivel predeterminado en caso de error
-        return {
-          userLevel: {
-            id: 0,
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error('Error al verificar si existe nivel de usuario:', checkError);
+      }
+
+      let newLevel;
+
+      if (existingLevel) {
+        // Si ya existe, actualizar en lugar de insertar
+        console.log('Ya existe un registro de nivel para este usuario, actualizando...');
+        const { data: updatedLevel, error: updateError } = await supabase
+          .from('user_levels')
+          .update({
+            level_definition_id: levelOne.id,
+            next_level_xp: levelOne.xp_required,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingLevel.id)
+          .select('*')
+          .single();
+
+        if (updateError) {
+          console.error('Error al actualizar nivel de usuario:', updateError);
+          // Continuar con el nivel existente
+        } else {
+          newLevel = updatedLevel;
+        }
+      } else {
+        // Si no existe, crear uno nuevo
+        console.log('Creando nuevo registro de nivel para el usuario...');
+        const { data: insertedLevel, error: createError } = await supabase
+          .from('user_levels')
+          .insert({
             user_id: user.id,
             level: 1,
             total_xp: 0,
             next_level_xp: levelOne.xp_required,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            level_definitions: levelOne
-          } as UserLevel,
-          error: null
-        };
+            level_definition_id: levelOne.id
+          })
+          .select('*')
+          .single();
+
+        if (createError) {
+          console.error('Error al crear nivel de usuario:', createError);
+          // Devolver un nivel predeterminado en caso de error
+          return {
+            userLevel: {
+              id: 0,
+              user_id: user.id,
+              level: 1,
+              total_xp: 0,
+              next_level_xp: levelOne.xp_required,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              level_definitions: levelOne
+            } as UserLevel,
+            error: null
+          };
+        }
+
+        newLevel = insertedLevel;
+      }
+
+      // Si no tenemos un nivel después de todo, obtener el existente
+      if (!newLevel) {
+        const { data: fetchedLevel, error: fetchError } = await supabase
+          .from('user_levels')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+
+        if (fetchError) {
+          console.error('Error al obtener nivel existente:', fetchError);
+          // Devolver un nivel predeterminado en caso de error
+          return {
+            userLevel: {
+              id: 0,
+              user_id: user.id,
+              level: 1,
+              total_xp: 0,
+              next_level_xp: levelOne.xp_required,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              level_definitions: levelOne
+            } as UserLevel,
+            error: null
+          };
+        }
+
+        newLevel = fetchedLevel;
       }
 
       // Combinar manualmente el nivel con su definición
@@ -397,4 +464,270 @@ export const getLevelReward = async (level: number) => {
   }
 
   return { reward: data.reward_description, error: null };
+};
+
+// Almacenamiento en memoria para el sistema de cooldown y límites
+interface ActionCooldown {
+  lastActionTime: { [key: string]: number };  // Timestamp de la última acción por tipo
+  dailyXP: { [key: string]: number };         // XP acumulada por día
+  actionCounts: { [key: string]: number };    // Conteo de acciones por tipo en un período
+  lastResetDate: string;                      // Fecha del último reset diario
+}
+
+// Inicializar el sistema de cooldown
+const actionCooldown: ActionCooldown = {
+  lastActionTime: {},
+  dailyXP: {},
+  actionCounts: {},
+  lastResetDate: new Date().toISOString().split('T')[0] // Formato YYYY-MM-DD
+};
+
+// Constantes para el sistema de límites
+const COOLDOWN_TIMES = {
+  'Eligió verdad': 2000,       // 2 segundos entre acciones de verdad
+  'Eligió reto': 2000,         // 2 segundos entre acciones de reto
+  'Eligió aleatorio': 2000,    // 2 segundos entre acciones aleatorias
+  'Completó desafío': 3000,    // 3 segundos entre completar desafíos
+  'Tomó shots': 3000,          // 3 segundos entre tomar shots
+  'default': 1000              // 1 segundo para otras acciones
+};
+
+const DAILY_XP_LIMIT = 1000;   // Límite de 1000 XP por día
+const ACTION_COUNT_LIMIT = {
+  'Eligió verdad': 50,         // Máximo 50 verdades por día
+  'Eligió reto': 50,           // Máximo 50 retos por día
+  'Eligió aleatorio': 50,      // Máximo 50 aleatorios por día
+  'Completó desafío': 30,      // Máximo 30 desafíos completados por día
+  'Tomó shots': 20,            // Máximo 20 veces tomando shots por día
+  'default': 100               // Límite predeterminado para otras acciones
+};
+
+// Función para verificar y resetear los límites diarios si es necesario
+const checkAndResetDailyLimits = (userId: string) => {
+  const today = new Date().toISOString().split('T')[0]; // Formato YYYY-MM-DD
+
+  if (actionCooldown.lastResetDate !== today) {
+    console.log('Reseteando límites diarios de XP');
+    actionCooldown.dailyXP = {};
+    actionCooldown.actionCounts = {};
+    actionCooldown.lastResetDate = today;
+  }
+
+  // Inicializar contadores para este usuario si no existen
+  if (!actionCooldown.dailyXP[userId]) {
+    actionCooldown.dailyXP[userId] = 0;
+  }
+
+  if (!actionCooldown.actionCounts[userId]) {
+    actionCooldown.actionCounts[userId] = 0;
+  }
+};
+
+// Función para verificar si una acción está en cooldown
+const isActionInCooldown = (userId: string, action: string): boolean => {
+  const actionKey = `${userId}_${action}`;
+  const now = Date.now();
+  const lastTime = actionCooldown.lastActionTime[actionKey] || 0;
+  const cooldownTime = COOLDOWN_TIMES[action] || COOLDOWN_TIMES.default;
+
+  return (now - lastTime) < cooldownTime;
+};
+
+// Función para verificar si se ha alcanzado el límite diario de XP
+const hasReachedDailyXPLimit = (userId: string, xpToAdd: number): boolean => {
+  return (actionCooldown.dailyXP[userId] + xpToAdd) > DAILY_XP_LIMIT;
+};
+
+// Función para verificar si se ha alcanzado el límite de acciones por tipo
+const hasReachedActionCountLimit = (userId: string, action: string): boolean => {
+  const actionKey = `${userId}_${action}`;
+  const count = actionCooldown.actionCounts[actionKey] || 0;
+  const limit = ACTION_COUNT_LIMIT[action] || ACTION_COUNT_LIMIT.default;
+
+  return count >= limit;
+};
+
+// Función para registrar una acción
+const recordAction = (userId: string, action: string, xpAmount: number) => {
+  const actionKey = `${userId}_${action}`;
+  const now = Date.now();
+
+  // Actualizar tiempo de la última acción
+  actionCooldown.lastActionTime[actionKey] = now;
+
+  // Actualizar XP diaria
+  actionCooldown.dailyXP[userId] += xpAmount;
+
+  // Actualizar conteo de acciones
+  if (!actionCooldown.actionCounts[actionKey]) {
+    actionCooldown.actionCounts[actionKey] = 0;
+  }
+  actionCooldown.actionCounts[actionKey]++;
+};
+
+// Función para calcular la XP ajustada basada en la frecuencia de acciones
+const calculateAdjustedXP = (userId: string, action: string, baseXP: number): number => {
+  const actionKey = `${userId}_${action}`;
+  const actionCount = actionCooldown.actionCounts[actionKey] || 0;
+
+  // Reducir la XP gradualmente si el usuario realiza la misma acción repetidamente
+  if (actionCount > 10) {
+    // Reducción gradual: 100% -> 50% después de 50 acciones del mismo tipo
+    const reductionFactor = Math.max(0.5, 1 - (actionCount - 10) / 80);
+    return Math.floor(baseXP * reductionFactor);
+  }
+
+  return baseXP;
+};
+
+// Función para añadir XP al usuario por acciones en el juego
+export const addExperiencePoints = async (xpAmount: number, action: string) => {
+  try {
+    console.log(`Solicitando añadir ${xpAmount} puntos de experiencia por acción: ${action}`);
+
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      console.error('Error: Usuario no autenticado en addExperiencePoints');
+      return { success: false, error: new Error('Usuario no autenticado') };
+    }
+
+    const userId = user.id;
+
+    // Verificar y resetear límites diarios si es necesario
+    checkAndResetDailyLimits(userId);
+
+    // Verificar si la acción está en cooldown
+    if (isActionInCooldown(userId, action)) {
+      console.log(`Acción "${action}" en cooldown, ignorando solicitud de XP`);
+      return {
+        success: false,
+        cooldown: true,
+        error: new Error('Acción en cooldown')
+      };
+    }
+
+    // Verificar si se ha alcanzado el límite diario de XP
+    if (hasReachedDailyXPLimit(userId, xpAmount)) {
+      console.log(`Límite diario de XP alcanzado para el usuario ${userId}`);
+      return {
+        success: false,
+        limitReached: true,
+        error: new Error('Límite diario de XP alcanzado')
+      };
+    }
+
+    // Verificar si se ha alcanzado el límite de acciones por tipo
+    if (hasReachedActionCountLimit(userId, action)) {
+      console.log(`Límite de acciones "${action}" alcanzado para el usuario ${userId}`);
+      return {
+        success: false,
+        limitReached: true,
+        error: new Error(`Límite de acciones "${action}" alcanzado`)
+      };
+    }
+
+    // Calcular la XP ajustada basada en la frecuencia de acciones
+    const adjustedXP = calculateAdjustedXP(userId, action, xpAmount);
+
+    // Registrar la acción
+    recordAction(userId, action, adjustedXP);
+
+    console.log(`Añadiendo ${adjustedXP} puntos de experiencia (ajustado de ${xpAmount}) por acción: ${action}`);
+
+    // Obtener el nivel actual del usuario
+    const { userLevel, error: levelError } = await getUserLevel();
+
+    if (levelError) {
+      console.error('Error al obtener nivel del usuario:', levelError);
+      return { success: false, error: levelError };
+    }
+
+    if (!userLevel) {
+      console.error('No se pudo obtener el nivel del usuario');
+      return { success: false, error: new Error('No se pudo obtener el nivel del usuario') };
+    }
+
+    // Calcular la nueva XP total
+    const newTotalXP = userLevel.total_xp + adjustedXP;
+    console.log(`XP actual: ${userLevel.total_xp}, Nueva XP: ${newTotalXP}`);
+
+    // Actualizar la XP en la base de datos
+    const { error: updateError } = await supabase
+      .from('user_levels')
+      .update({
+        total_xp: newTotalXP,
+        updated_at: new Date().toISOString()
+      })
+      .eq('user_id', user.id);
+
+    if (updateError) {
+      console.error('Error al actualizar XP:', updateError);
+      return { success: false, error: updateError };
+    }
+
+    console.log('XP actualizada correctamente');
+
+    // Verificar si el usuario ha subido de nivel
+    const { leveledUp, newLevel, error: updateLevelError } = await updateUserLevel();
+
+    if (updateLevelError) {
+      console.error('Error al actualizar nivel:', updateLevelError);
+      // No retornamos error aquí, ya que la XP se actualizó correctamente
+    }
+
+    if (leveledUp) {
+      console.log(`¡El usuario ha subido al nivel ${newLevel}!`);
+    }
+
+    // Registrar la acción en las estadísticas del jugador (si existe la tabla)
+    try {
+      // Primero, obtener las estadísticas actuales del jugador
+      const { data: currentStats, error: getStatsError } = await supabase
+        .from('player_stats')
+        .select('total_xp_earned, actions_count')
+        .eq('user_id', user.id)
+        .single();
+
+      if (getStatsError && getStatsError.code !== 'PGRST116') {
+        console.error('Error al obtener estadísticas actuales:', getStatsError);
+      }
+
+      // Valores predeterminados si no hay estadísticas previas
+      const currentXP = currentStats?.total_xp_earned || 0;
+      const currentActions = currentStats?.actions_count || 0;
+
+      // Actualizar o insertar estadísticas
+      const { error: statsError } = await supabase
+        .from('player_stats')
+        .upsert({
+          user_id: user.id,
+          last_action: action,
+          last_action_time: new Date().toISOString(),
+          total_xp_earned: currentXP + adjustedXP,
+          actions_count: currentActions + 1,
+          updated_at: new Date().toISOString()
+        });
+
+      if (statsError) {
+        console.error('Error al actualizar estadísticas:', statsError);
+        // No retornamos error aquí, ya que la XP se actualizó correctamente
+      }
+    } catch (statsError) {
+      console.error('Error al actualizar estadísticas (posiblemente la tabla no existe):', statsError);
+      // No hacemos nada, simplemente continuamos
+    }
+
+    return {
+      success: true,
+      leveledUp,
+      newLevel,
+      newTotalXP,
+      xpAwarded: adjustedXP,
+      error: null
+    };
+  } catch (error) {
+    console.error('Error general en addExperiencePoints:', error);
+    return { success: false, error };
+  }
 };

@@ -15,6 +15,7 @@ import { getRandomQuestion, Question, Player } from '../services/supabase';
 import { useAchievements } from '../context/AchievementsContext';
 import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
+import { addExperiencePoints } from '../services/levels';
 
 type GameScreenProps = {
   navigation: any;
@@ -157,6 +158,28 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation, route }) => {
         total_games: 1,
         last_played_at: new Date().toISOString()
       });
+
+      // Añadir puntos de experiencia por iniciar un juego
+      try {
+        // Dar más XP si es modo Extremo
+        const xpAmount = modeName === 'Extremo' ? 50 : 25;
+        const result = await addExperiencePoints(xpAmount, `Inició juego en modo ${modeName}`);
+
+        // Si hay límites, mostrar un mensaje sutil pero permitir continuar
+        if (!result.success && result.limitReached) {
+          Alert.alert(
+            'Límite de XP diario',
+            'Has alcanzado el límite de XP por hoy, pero puedes seguir jugando normalmente.',
+            [{ text: 'Entendido' }]
+          );
+        } else if (result.success && players.length > 1) {
+          // Dar XP adicional por cada jugador solo si no se alcanzó el límite
+          // (incentiva jugar con más amigos)
+          await addExperiencePoints(players.length * 5, `Jugó con ${players.length} jugadores`);
+        }
+      } catch (error) {
+        console.error('Error al añadir puntos de experiencia por iniciar juego:', error);
+      }
     };
 
     initGame();
@@ -211,48 +234,128 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation, route }) => {
     }
   };
 
-  const handleTruth = () => {
-    fetchQuestion('truth');
-    // Actualizar estadísticas y verificar logros
-    setGameStats(prev => ({
-      ...prev,
-      truthCount: prev.truthCount + 1
-    }));
+  const handleTruth = async () => {
+    // Añadir puntos de experiencia (10 XP por elegir verdad)
+    try {
+      const result = await addExperiencePoints(10, 'Eligió verdad');
 
-    // Verificar logro de maestro de la verdad
-    trackAchievements([{ code: 'truth_master' }]);
+      // Si la acción está en cooldown o se alcanzó un límite, no continuar con la acción
+      if (!result.success) {
+        if (result.cooldown) {
+          console.log('Acción en cooldown, ignorando');
+          return;
+        }
 
-    // Verificar logro de buscador de verdades (20 verdades consecutivas)
-    if (gameStats.dareCount === 0 && gameStats.truthCount >= 19) {
-      trackAchievements([{ code: 'truth_seeker' }]);
+        if (result.limitReached) {
+          // Mostrar mensaje sutil al usuario
+          Alert.alert(
+            'Límite alcanzado',
+            'Has alcanzado el límite de esta acción por hoy. ¡Prueba con otra!',
+            [{ text: 'Entendido' }]
+          );
+          return;
+        }
+      }
+
+      // Continuar con la acción normal
+      fetchQuestion('truth');
+
+      // Actualizar estadísticas y verificar logros
+      setGameStats(prev => ({
+        ...prev,
+        truthCount: prev.truthCount + 1
+      }));
+
+      // Verificar logro de maestro de la verdad
+      trackAchievements([{ code: 'truth_master' }]);
+
+      // Verificar logro de buscador de verdades (20 verdades consecutivas)
+      if (gameStats.dareCount === 0 && gameStats.truthCount >= 19) {
+        trackAchievements([{ code: 'truth_seeker' }]);
+      }
+
+      // Actualizar estadísticas en la base de datos
+      updateStats({ truth_count: 1 });
+    } catch (error) {
+      console.error('Error al añadir puntos de experiencia:', error);
     }
-
-    // Actualizar estadísticas en la base de datos
-    updateStats({ truth_count: 1 });
   };
 
-  const handleDare = () => {
-    fetchQuestion('dare');
-    // Actualizar estadísticas y verificar logros
-    setGameStats(prev => ({
-      ...prev,
-      dareCount: prev.dareCount + 1
-    }));
+  const handleDare = async () => {
+    // Añadir puntos de experiencia (15 XP por elegir reto - más que verdad porque es más arriesgado)
+    try {
+      const result = await addExperiencePoints(15, 'Eligió reto');
 
-    // Verificar logro de maestro del reto
-    trackAchievements([{ code: 'dare_master' }]);
+      // Si la acción está en cooldown o se alcanzó un límite, no continuar con la acción
+      if (!result.success) {
+        if (result.cooldown) {
+          console.log('Acción en cooldown, ignorando');
+          return;
+        }
 
-    // Verificar logro de atrevido (20 retos consecutivos)
-    if (gameStats.truthCount === 0 && gameStats.dareCount >= 19) {
-      trackAchievements([{ code: 'dare_devil' }]);
+        if (result.limitReached) {
+          // Mostrar mensaje sutil al usuario
+          Alert.alert(
+            'Límite alcanzado',
+            'Has alcanzado el límite de esta acción por hoy. ¡Prueba con otra!',
+            [{ text: 'Entendido' }]
+          );
+          return;
+        }
+      }
+
+      // Continuar con la acción normal
+      fetchQuestion('dare');
+
+      // Actualizar estadísticas y verificar logros
+      setGameStats(prev => ({
+        ...prev,
+        dareCount: prev.dareCount + 1
+      }));
+
+      // Verificar logro de maestro del reto
+      trackAchievements([{ code: 'dare_master' }]);
+
+      // Verificar logro de atrevido (20 retos consecutivos)
+      if (gameStats.truthCount === 0 && gameStats.dareCount >= 19) {
+        trackAchievements([{ code: 'dare_devil' }]);
+      }
+
+      // Actualizar estadísticas en la base de datos
+      updateStats({ dare_count: 1 });
+    } catch (error) {
+      console.error('Error al añadir puntos de experiencia:', error);
     }
-
-    // Actualizar estadísticas en la base de datos
-    updateStats({ dare_count: 1 });
   };
 
-  const handleRandom = () => {
-    fetchQuestion();
+  const handleRandom = async () => {
+    // Añadir puntos de experiencia (5 XP por elegir aleatorio)
+    try {
+      const result = await addExperiencePoints(5, 'Eligió aleatorio');
+
+      // Si la acción está en cooldown o se alcanzó un límite, no continuar con la acción
+      if (!result.success) {
+        if (result.cooldown) {
+          console.log('Acción en cooldown, ignorando');
+          return;
+        }
+
+        if (result.limitReached) {
+          // Mostrar mensaje sutil al usuario
+          Alert.alert(
+            'Límite alcanzado',
+            'Has alcanzado el límite de esta acción por hoy. ¡Prueba con otra!',
+            [{ text: 'Entendido' }]
+          );
+          return;
+        }
+      }
+
+      // Continuar con la acción normal
+      fetchQuestion();
+    } catch (error) {
+      console.error('Error al añadir puntos de experiencia:', error);
+    }
   };
 
   // Función auxiliar para obtener el pronombre correcto según el género
@@ -276,65 +379,170 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation, route }) => {
     setSelectedType(null);
   };
 
-  const handleRefuse = () => {
-    // Actualizar estadísticas de shots tomados
-    setGameStats(prev => ({
-      ...prev,
-      shotsTaken: prev.shotsTaken + shotCount
-    }));
+  const handleRefuse = async () => {
+    // Añadir puntos de experiencia (3 XP por cada shot tomado)
+    try {
+      const result = await addExperiencePoints(3 * shotCount, 'Tomó shots');
 
-    // Verificar logro de bebedor valiente
-    trackAchievements([{ code: 'shot_taker', increment: shotCount }]);
+      // Si la acción está en cooldown o se alcanzó un límite, no continuar con la acción
+      if (!result.success) {
+        if (result.cooldown) {
+          console.log('Acción en cooldown, ignorando');
+          // Aún así permitimos continuar con la acción, pero sin otorgar XP
+        } else if (result.limitReached) {
+          // Mostrar mensaje sutil al usuario, pero permitir continuar
+          Alert.alert(
+            'Límite de XP alcanzado',
+            'Has alcanzado el límite de XP por tomar shots hoy, pero puedes continuar jugando.',
+            [{ text: 'Entendido' }]
+          );
+        }
+      }
 
-    // Verificar logro de maestro de shots
-    trackAchievements([{ code: 'shot_master', increment: shotCount }]);
+      // Continuar con la acción normal (siempre, incluso si hay límites)
+      // Actualizar estadísticas de shots tomados
+      setGameStats(prev => ({
+        ...prev,
+        shotsTaken: prev.shotsTaken + shotCount
+      }));
 
-    // Actualizar estadísticas en la base de datos
-    updateStats({ shots_taken: shotCount });
+      // Verificar logro de bebedor valiente
+      trackAchievements([{ code: 'shot_taker', increment: shotCount }]);
 
-    // Reiniciar contadores de racha para los logros de verdad/reto consecutivos
-    if (selectedType === 'truth') {
-      setGameStats(prev => ({ ...prev, truthCount: 0 }));
-    } else {
-      setGameStats(prev => ({ ...prev, dareCount: 0 }));
-    }
+      // Verificar logro de maestro de shots
+      trackAchievements([{ code: 'shot_master', increment: shotCount }]);
 
-    Alert.alert(
-      '¡Toma un Shot!',
-      `¡${currentPlayer.name} rechazó el ${selectedType === 'truth' ? 'reto de verdad' : 'desafío'}! ${getPronoun('subject')} debe tomar ${shotCount} shot${shotCount > 1 ? 's' : ''}.`,
-      [
-        {
-          text: 'Shots Tomados',
-          onPress: () => {
-            // Aumentar contador de shots para el próximo rechazo
-            setShotCount(prev => prev + 1);
-            // Reiniciar para el siguiente jugador
-            resetForNextPlayer();
+      // Actualizar estadísticas en la base de datos
+      updateStats({ shots_taken: shotCount });
+
+      // Reiniciar contadores de racha para los logros de verdad/reto consecutivos
+      if (selectedType === 'truth') {
+        setGameStats(prev => ({ ...prev, truthCount: 0 }));
+      } else {
+        setGameStats(prev => ({ ...prev, dareCount: 0 }));
+      }
+
+      Alert.alert(
+        '¡Toma un Shot!',
+        `¡${currentPlayer.name} rechazó el ${selectedType === 'truth' ? 'reto de verdad' : 'desafío'}! ${getPronoun('subject')} debe tomar ${shotCount} shot${shotCount > 1 ? 's' : ''}.`,
+        [
+          {
+            text: 'Shots Tomados',
+            onPress: () => {
+              // Aumentar contador de shots para el próximo rechazo
+              setShotCount(prev => prev + 1);
+              // Reiniciar para el siguiente jugador
+              resetForNextPlayer();
+            },
           },
-        },
-      ]
-    );
+        ]
+      );
+    } catch (error) {
+      console.error('Error al añadir puntos de experiencia:', error);
+
+      // Continuar con la acción normal incluso si hay error
+      // Actualizar estadísticas de shots tomados
+      setGameStats(prev => ({
+        ...prev,
+        shotsTaken: prev.shotsTaken + shotCount
+      }));
+
+      // Verificar logro de bebedor valiente
+      trackAchievements([{ code: 'shot_taker', increment: shotCount }]);
+
+      // Verificar logro de maestro de shots
+      trackAchievements([{ code: 'shot_master', increment: shotCount }]);
+
+      // Actualizar estadísticas en la base de datos
+      updateStats({ shots_taken: shotCount });
+
+      // Reiniciar contadores de racha para los logros de verdad/reto consecutivos
+      if (selectedType === 'truth') {
+        setGameStats(prev => ({ ...prev, truthCount: 0 }));
+      } else {
+        setGameStats(prev => ({ ...prev, dareCount: 0 }));
+      }
+
+      Alert.alert(
+        '¡Toma un Shot!',
+        `¡${currentPlayer.name} rechazó el ${selectedType === 'truth' ? 'reto de verdad' : 'desafío'}! ${getPronoun('subject')} debe tomar ${shotCount} shot${shotCount > 1 ? 's' : ''}.`,
+        [
+          {
+            text: 'Shots Tomados',
+            onPress: () => {
+              // Aumentar contador de shots para el próximo rechazo
+              setShotCount(prev => prev + 1);
+              // Reiniciar para el siguiente jugador
+              resetForNextPlayer();
+            },
+          },
+        ]
+      );
+    }
   };
 
-  const handleComplete = () => {
-    // Verificar logro de racha perfecta
-    if (shotCount >= 10) {
-      trackAchievements([{ code: 'perfect_streak' }]);
-    }
+  const handleComplete = async () => {
+    // Añadir puntos de experiencia (20 XP por completar un desafío)
+    try {
+      const result = await addExperiencePoints(20, 'Completó desafío');
 
-    Alert.alert(
-      '¡Bien Hecho!',
-      `¡${currentPlayer.name} completó el desafío! Turno del siguiente jugador.`,
-      [
-        {
-          text: 'Siguiente Jugador',
-          onPress: () => {
-            // Reiniciar para el siguiente jugador
-            resetForNextPlayer();
+      // Si la acción está en cooldown o se alcanzó un límite, no continuar con la acción
+      if (!result.success) {
+        if (result.cooldown) {
+          console.log('Acción en cooldown, ignorando');
+          // Aún así permitimos continuar con la acción, pero sin otorgar XP
+        } else if (result.limitReached) {
+          // Mostrar mensaje sutil al usuario, pero permitir continuar
+          Alert.alert(
+            'Límite de XP alcanzado',
+            'Has alcanzado el límite de XP por completar desafíos hoy, pero puedes continuar jugando.',
+            [{ text: 'Entendido' }]
+          );
+        }
+      }
+
+      // Continuar con la acción normal (siempre, incluso si hay límites)
+      // Verificar logro de racha perfecta
+      if (shotCount >= 10) {
+        trackAchievements([{ code: 'perfect_streak' }]);
+      }
+
+      Alert.alert(
+        '¡Bien Hecho!',
+        `¡${currentPlayer.name} completó el desafío! Turno del siguiente jugador.`,
+        [
+          {
+            text: 'Siguiente Jugador',
+            onPress: () => {
+              // Reiniciar para el siguiente jugador
+              resetForNextPlayer();
+            },
           },
-        },
-      ]
-    );
+        ]
+      );
+    } catch (error) {
+      console.error('Error al añadir puntos de experiencia:', error);
+
+      // Continuar con la acción normal incluso si hay error
+      // Verificar logro de racha perfecta
+      if (shotCount >= 10) {
+        trackAchievements([{ code: 'perfect_streak' }]);
+      }
+
+      Alert.alert(
+        '¡Bien Hecho!',
+        `¡${currentPlayer.name} completó el desafío! Turno del siguiente jugador.`,
+        [
+          {
+            text: 'Siguiente Jugador',
+            onPress: () => {
+              // Reiniciar para el siguiente jugador
+              resetForNextPlayer();
+            },
+          },
+        ]
+      );
+    }
   };
 
   // Función para obtener un color basado en el género
@@ -544,14 +752,45 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation, route }) => {
           </View>
         </View>
 
-        {/* Botón de volver */}
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Icon name="arrow-back" type="material" size={20} color="#ff5722" />
-          <Text style={styles.backButtonText}>Volver a Jugadores</Text>
-        </TouchableOpacity>
+        {/* Botones de navegación */}
+        <View style={styles.navigationButtons}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Icon name="arrow-back" type="material" size={20} color="#ff5722" />
+            <Text style={styles.backButtonText}>Volver</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.endGameButton}
+            onPress={() => {
+              Alert.alert(
+                "Terminar Partida",
+                "¿Estás seguro de que quieres terminar la partida y volver al menú de jugadores?",
+                [
+                  {
+                    text: "Cancelar",
+                    style: "cancel"
+                  },
+                  {
+                    text: "Terminar",
+                    onPress: () => {
+                      // Navegar a la pantalla de jugadores con los mismos parámetros
+                      navigation.navigate('Players', {
+                        modeId: route.params.modeId,
+                        modeName: route.params.modeName
+                      });
+                    }
+                  }
+                ]
+              );
+            }}
+          >
+            <Icon name="exit-to-app" type="material" size={20} color="#f44336" />
+            <Text style={styles.endGameButtonText}>Terminar Partida</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </View>
   );
@@ -795,6 +1034,13 @@ const styles = StyleSheet.create({
     color: '#ff5722',
     fontWeight: 'bold',
   },
+  navigationButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    paddingHorizontal: 10,
+    width: '100%',
+  },
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -803,9 +1049,27 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 8,
+    flex: 1,
+    marginRight: 10,
   },
   backButtonText: {
     color: '#ff5722',
+    fontSize: 16,
+    marginLeft: 8,
+  },
+  endGameButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#f44336',
+    borderRadius: 8,
+    flex: 1,
+    marginLeft: 10,
+  },
+  endGameButtonText: {
+    color: '#f44336',
     fontSize: 16,
     marginLeft: 8,
   },
