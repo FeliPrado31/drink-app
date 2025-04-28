@@ -776,7 +776,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation, route }) => {
             onPress={() => {
               Alert.alert(
                 "Terminar Partida",
-                "¿Estás seguro de que quieres terminar la partida y volver al menú de jugadores?",
+                "¿Estás seguro de que quieres terminar la partida y volver al inicio?",
                 [
                   {
                     text: "Cancelar",
@@ -785,18 +785,15 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation, route }) => {
                   {
                     text: "Terminar",
                     onPress: () => {
-                      // Navegar a la pantalla de jugadores con los mismos parámetros
-                      navigation.navigate('Players', {
-                        modeId: route.params.modeId,
-                        modeName: route.params.modeName
-                      });
+                      // Navegar a la pantalla de inicio (Home)
+                      navigation.navigate('Home');
                     }
                   }
                 ]
               );
             }}
           >
-            <Icon name="exit-to-app" type="material" size={20} color="#f44336" />
+            <Icon name="home" type="material" size={20} color="#f44336" />
             <Text style={styles.endGameButtonText}>Terminar Partida</Text>
           </TouchableOpacity>
         </View>
