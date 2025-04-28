@@ -17,7 +17,6 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.felidev.drinkapp",
       "config": {
-        "googleMobileAdsAppId": "ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY"
       },
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Esta app necesita acceso a tu ubicación para desbloquear logros basados en ubicación.",
@@ -31,7 +30,6 @@
       },
       "package": "com.felidev.drinkapp",
       "config": {
-        "googleMobileAdsAppId": "ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY"
       },
       "permissions": [
         "ACCESS_COARSE_LOCATION",

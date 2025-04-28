@@ -1,6 +1,6 @@
 /**
  * Sistema de logs mejorado para monitorear el rendimiento y depurar la aplicación
- * 
+ *
  * Este sistema permite controlar el nivel de detalle de los logs y agrupar
  * mensajes repetitivos para reducir la verbosidad.
  */
@@ -15,22 +15,23 @@ export enum LogLevel {
 
 export class Logger {
   private static instance: Logger;
-  private logLevel: LogLevel = __DEV__ ? LogLevel.DEBUG : LogLevel.WARNING;
+  private logLevel: LogLevel = __DEV__ ? LogLevel.DEBUG : LogLevel.ERROR; // Solo errores en producción
   private logCounts: Map<string, number> = new Map();
   private groupedLogs: Map<string, { count: number, lastTime: number }> = new Map();
-  private GROUP_THRESHOLD = 1000; // Tiempo en ms para agrupar logs similares
-  
+  private GROUP_THRESHOLD = __DEV__ ? 1000 : 5000; // Tiempo en ms para agrupar logs similares (más largo en producción)
+  private MAX_LOG_ENTRIES = __DEV__ ? 1000 : 100; // Número máximo de entradas de log únicas a mantener
+
   private constructor() {
     console.log('Logger: Inicializado con nivel', this.getLogLevelName(this.logLevel));
   }
-  
+
   public static getInstance(): Logger {
     if (!Logger.instance) {
       Logger.instance = new Logger();
     }
     return Logger.instance;
   }
-  
+
   /**
    * Establece el nivel de detalle de los logs
    * @param level Nivel de log a establecer
@@ -39,7 +40,7 @@ export class Logger {
     this.logLevel = level;
     this.info(`Nivel de log cambiado a ${this.getLogLevelName(level)}`);
   }
-  
+
   /**
    * Registra un mensaje de depuración (nivel más detallado)
    * @param message Mensaje a registrar
@@ -50,7 +51,7 @@ export class Logger {
       this.log('DEBUG', message, args);
     }
   }
-  
+
   /**
    * Registra un mensaje informativo
    * @param message Mensaje a registrar
@@ -61,7 +62,7 @@ export class Logger {
       this.log('INFO', message, args);
     }
   }
-  
+
   /**
    * Registra una advertencia
    * @param message Mensaje a registrar
@@ -72,7 +73,7 @@ export class Logger {
       this.log('WARNING', message, args);
     }
   }
-  
+
   /**
    * Registra un error
    * @param message Mensaje a registrar
@@ -131,7 +132,7 @@ export class Logger {
       return operation();
     }
   }
-  
+
   /**
    * Método interno para procesar y mostrar los logs
    * @param level Nivel del log
@@ -143,21 +144,33 @@ export class Logger {
     const key = `${level}:${message}`;
     const now = Date.now();
     const grouped = this.groupedLogs.get(key);
-    
+
+    // Limitar el tamaño del mapa de logs para evitar fugas de memoria
+    if (this.groupedLogs.size > this.MAX_LOG_ENTRIES) {
+      // Eliminar las entradas más antiguas
+      const keysToDelete = Array.from(this.groupedLogs.entries())
+        .sort((a, b) => a[1].lastTime - b[1].lastTime)
+        .slice(0, Math.floor(this.MAX_LOG_ENTRIES * 0.2)) // Eliminar el 20% más antiguo
+        .map(entry => entry[0]);
+
+      keysToDelete.forEach(k => this.groupedLogs.delete(k));
+    }
+
     // Si es un mensaje repetido en un corto período de tiempo
     if (grouped && (now - grouped.lastTime) < this.GROUP_THRESHOLD) {
       this.groupedLogs.set(key, {
         count: grouped.count + 1,
         lastTime: now
       });
-      
-      // Solo mostrar cada 10 repeticiones o cuando han pasado más de 5 segundos
-      if (grouped.count % 10 === 0) {
+
+      // En producción, reducimos aún más la frecuencia de los logs repetidos
+      const logFrequency = __DEV__ ? 10 : 50;
+      if (grouped.count % logFrequency === 0) {
         this.showLog(level, `${message} (repetido ${grouped.count} veces)`, args);
       }
       return;
     }
-    
+
     // Si es un mensaje nuevo o ha pasado suficiente tiempo
     if (grouped) {
       // Mostrar resumen de mensajes agrupados anteriores
@@ -165,16 +178,16 @@ export class Logger {
         this.showLog(level, `${message} (total: ${grouped.count} veces)`, args);
       }
     }
-    
+
     // Registrar nuevo mensaje
     this.groupedLogs.set(key, {
       count: 1,
       lastTime: now
     });
-    
+
     this.showLog(level, message, args);
   }
-  
+
   /**
    * Muestra el log en la consola con el formato adecuado
    * @param level Nivel del log
@@ -184,7 +197,7 @@ export class Logger {
   private showLog(level: string, message: string, args: any[]): void {
     const timestamp = new Date().toISOString().substring(11, 23); // HH:MM:SS.mmm
     const prefix = `[${timestamp}] ${level}:`;
-    
+
     switch (level) {
       case 'DEBUG':
         console.log(`${prefix} ${message}`, ...args);

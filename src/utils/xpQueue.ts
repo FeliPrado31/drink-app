@@ -26,8 +26,8 @@ export class XPQueue {
   private queue: XPQueueItem[] = [];
   private isProcessing = false;
   private flushInterval: NodeJS.Timeout | null = null;
-  private FLUSH_INTERVAL = 10000; // 10 segundos
-  private MAX_BATCH_SIZE = 5; // Número máximo de elementos antes de procesar automáticamente
+  private FLUSH_INTERVAL = 30000; // 30 segundos para producción (era 10 segundos)
+  private MAX_BATCH_SIZE = 10; // Número máximo de elementos antes de procesar automáticamente (era 5)
 
   private constructor() {
     logger.info('XPQueue: Inicializado');
@@ -184,37 +184,56 @@ export class XPQueue {
       cacheManager.invalidate(`${CACHE_KEYS.USER_LEVEL}_${user.id}`);
 
       // Actualizar estadísticas del jugador si es posible
+      // Usamos una transacción RPC para actualizar las estadísticas en una sola llamada
       try {
-        // Obtener estadísticas actuales
-        const { data: currentStats, error: getStatsError } = await supabase
-          .from('player_stats')
-          .select('total_xp_earned, actions_count')
-          .eq('user_id', user.id)
-          .single();
-
-        if (getStatsError && getStatsError.code !== 'PGRST116') {
-          logger.error('Error al obtener estadísticas actuales:', getStatsError);
-          return;
-        }
-
-        // Valores predeterminados si no hay estadísticas previas
-        const statsXP = currentStats?.total_xp_earned || 0;
-        const currentActions = currentStats?.actions_count || 0;
-
-        // Actualizar o insertar estadísticas
+        // Llamar a una función RPC que actualiza las estadísticas en el servidor
+        // Esto reduce la cantidad de viajes de ida y vuelta a la base de datos
         const { error: statsError } = await supabase
-          .from('player_stats')
-          .upsert({
-            user_id: user.id,
-            last_action: action,
-            last_action_time: new Date().toISOString(),
-            total_xp_earned: statsXP + xpAmount,
-            actions_count: currentActions + 1,
-            updated_at: new Date().toISOString()
+          .rpc('update_player_stats', {
+            p_user_id: user.id,
+            p_action: action,
+            p_xp_amount: xpAmount
           });
 
         if (statsError) {
-          logger.error('Error al actualizar estadísticas:', statsError);
+          logger.error('Error al actualizar estadísticas mediante RPC:', statsError);
+
+          // Fallback: actualizar directamente si la función RPC falla
+          try {
+            // Obtener estadísticas actuales
+            const { data: currentStats, error: getStatsError } = await supabase
+              .from('player_stats')
+              .select('total_xp_earned, actions_count')
+              .eq('user_id', user.id)
+              .single();
+
+            if (getStatsError && getStatsError.code !== 'PGRST116') {
+              logger.error('Error al obtener estadísticas actuales:', getStatsError);
+              return;
+            }
+
+            // Valores predeterminados si no hay estadísticas previas
+            const statsXP = currentStats?.total_xp_earned || 0;
+            const currentActions = currentStats?.actions_count || 0;
+
+            // Actualizar o insertar estadísticas
+            const { error: fallbackError } = await supabase
+              .from('player_stats')
+              .upsert({
+                user_id: user.id,
+                last_action: action,
+                last_action_time: new Date().toISOString(),
+                total_xp_earned: statsXP + xpAmount,
+                actions_count: currentActions + 1,
+                updated_at: new Date().toISOString()
+              });
+
+            if (fallbackError) {
+              logger.error('Error en fallback al actualizar estadísticas:', fallbackError);
+            }
+          } catch (fallbackError) {
+            logger.error('Error en fallback al actualizar estadísticas:', fallbackError);
+          }
         }
       } catch (statsError) {
         logger.error('Error al actualizar estadísticas:', statsError);

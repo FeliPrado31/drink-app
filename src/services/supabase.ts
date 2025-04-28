@@ -16,8 +16,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     detectSessionInUrl: false, // Disable auto-detection of OAuth grants in URL for mobile
-    autoRefreshToken: true,
-    debug: false, // Enable debug logs for troubleshooting
+    autoRefreshToken: true, // Configurado para refrescar automáticamente pero con menos frecuencia
+    debug: false, // Disable debug logs for production
     flowType: 'implicit', // Use implicit flow for better mobile performance
     // Set a longer storage key refresh time to reduce frequent checks
     storageKey: 'supabase-auth-token',
@@ -178,11 +178,15 @@ export const signUpWithEmail = async (email: string, password: string) => {
     let errorMessage = 'Error al registrarse. Por favor, inténtalo de nuevo más tarde.';
 
     if (lastError) {
-      if (lastError.status === 503) {
+      // Verificamos si lastError tiene la propiedad status (para errores de API)
+      const errorStatus = (lastError as any).status;
+      const errorMsg = (lastError as any).message;
+
+      if (errorStatus === 503) {
         errorMessage = 'El servicio está temporalmente no disponible. Por favor, inténtalo de nuevo más tarde.';
-      } else if (lastError.status === 429) {
+      } else if (errorStatus === 429) {
         errorMessage = 'Demasiados intentos. Por favor, espera unos minutos antes de intentarlo de nuevo.';
-      } else if (lastError.message && lastError.message.includes('already registered')) {
+      } else if (errorMsg && typeof errorMsg === 'string' && errorMsg.includes('already registered')) {
         errorMessage = 'Este email ya está registrado. Por favor, inicia sesión o usa otro email.';
       }
     }
@@ -278,11 +282,14 @@ export const signInWithEmail = async (email: string, password: string) => {
     let errorMessage = 'Error al iniciar sesión. Por favor, inténtalo de nuevo más tarde.';
 
     if (lastError) {
-      if (lastError.status === 503) {
+      // Verificamos si lastError tiene la propiedad status (para errores de API)
+      const errorStatus = (lastError as any).status;
+
+      if (errorStatus === 503) {
         errorMessage = 'El servicio está temporalmente no disponible. Por favor, inténtalo de nuevo más tarde.';
-      } else if (lastError.status === 429) {
+      } else if (errorStatus === 429) {
         errorMessage = 'Demasiados intentos. Por favor, espera unos minutos antes de intentarlo de nuevo.';
-      } else if (lastError.status === 400 || lastError.status === 401) {
+      } else if (errorStatus === 400 || errorStatus === 401) {
         errorMessage = 'Email o contraseña incorrectos. Por favor, verifica tus credenciales.';
       }
     }

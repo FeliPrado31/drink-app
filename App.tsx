@@ -52,10 +52,15 @@ export default function App() {
     if (__DEV__) {
       logger.setLogLevel(0); // DEBUG en desarrollo
     } else {
-      logger.setLogLevel(2); // WARNING en producción
+      logger.setLogLevel(3); // ERROR en producción (solo errores)
     }
 
-    logger.info('Aplicación iniciada');
+    // Solo registrar inicio en desarrollo
+    if (__DEV__) {
+      logger.info('Aplicación iniciada');
+    }
+
+    // La inicialización de anuncios ha sido eliminada temporalmente
 
     // Registrar tareas de sincronización periódica
     syncManager.registerTask(

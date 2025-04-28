@@ -121,8 +121,106 @@ eas build --platform android --profile preview
 eas build --platform android --profile production
 ```
 
+### Publicación en Google Play Store
+
+Para publicar la aplicación en Google Play Store, sigue estos pasos:
+
+1. **Preparación de recursos**:
+   - Asegúrate de tener los siguientes recursos listos:
+     - Ícono de la aplicación (512x512 px)
+     - Imagen de portada (1024x500 px)
+     - Capturas de pantalla (al menos 2 por dispositivo)
+     - Video promocional (opcional)
+     - Descripción corta (80 caracteres máximo)
+     - Descripción completa (4000 caracteres máximo)
+
+2. **Crear una cuenta de desarrollador**:
+   - Regístrate en la [Google Play Console](https://play.google.com/console/signup)
+   - Paga la tarifa única de registro ($25 USD)
+
+3. **Configurar la aplicación en Google Play Console**:
+   - Crea una nueva aplicación
+   - Completa la información de la ficha de Play Store
+   - Configura la clasificación de contenido
+   - Configura el precio y la distribución
+
+4. **Generar un AAB (Android App Bundle) para producción**:
+   ```bash
+   eas build --platform android --profile production
+   ```
+
+5. **Subir el AAB a Google Play Console**:
+   - Ve a la sección "Producción" en Google Play Console
+   - Crea una nueva versión
+   - Sube el archivo AAB generado
+   - Completa las notas de la versión
+   - Envía para revisión
+
+6. **Actualizar la aplicación**:
+   Para futuras actualizaciones, incrementa la versión en `app.json` y ejecuta:
+   ```bash
+   eas build --platform android --profile production
+   ```
+
+7. **Enviar actualizaciones a través de EAS Update** (opcional):
+   Para cambios menores que no requieren una nueva versión en la tienda:
+   ```bash
+   eas update --branch production --message "Descripción de la actualización"
+   ```
+
 ## Seguridad
 
 - Nunca incluyas claves API o secretos directamente en el código
 - Utiliza siempre variables de entorno o EAS Secrets para gestionar información sensible
 - Asegúrate de que `.env` esté incluido en `.gitignore` para evitar subir credenciales al repositorio
+
+## Configuración de AdMob
+
+La aplicación está configurada para mostrar anuncios utilizando AdMob. Los IDs de AdMob están configurados en `app.json`:
+
+- App ID: ca-app-pub-7275388055615808~3583010996
+- Banner ID: ca-app-pub-7275388055615808/4816185702
+- Interstitial ad ID: ca-app-pub-7275388055615808/3059191415
+
+Para implementar completamente los anuncios, sigue estos pasos:
+
+1. **Instalar la biblioteca de Google Mobile Ads para React Native**:
+   ```bash
+   npx expo install react-native-google-mobile-ads
+   ```
+
+2. **Actualizar app.config.js para incluir los permisos necesarios**:
+   ```javascript
+   plugins: [
+     [
+       "react-native-google-mobile-ads",
+       {
+         "userTrackingPermission": "Esta aplicación utiliza la tecnología de anuncios para financiarse. La información de tu dispositivo se utilizará para ofrecerte anuncios personalizados."
+       }
+     ]
+   ]
+   ```
+
+3. **Implementar los componentes de anuncios**:
+   - Utiliza los componentes `AdBanner.tsx` y el servicio `ads.ts` que ya están creados
+   - Para implementar completamente, reemplaza el código de marcador de posición con el código real de AdMob
+
+4. **Pruebas de anuncios**:
+   - Durante el desarrollo, utiliza los IDs de prueba proporcionados por AdMob
+   - Verifica que los anuncios se muestren correctamente en diferentes dispositivos
+   - Asegúrate de que los anuncios no interfieran con la experiencia del usuario
+
+## Lista de verificación para lanzamiento
+
+Antes de lanzar la aplicación a producción, verifica los siguientes puntos:
+
+- [ ] Todas las funcionalidades principales funcionan correctamente
+- [ ] La autenticación con Supabase funciona sin problemas
+- [ ] Los anuncios se muestran correctamente y no son intrusivos
+- [ ] La aplicación maneja correctamente la pérdida de conexión a Internet
+- [ ] Las animaciones y transiciones son fluidas
+- [ ] La aplicación no tiene fugas de memoria o problemas de rendimiento
+- [ ] Todos los textos están en español y son gramaticalmente correctos
+- [ ] Los iconos y gráficos se ven bien en diferentes tamaños de pantalla
+- [ ] La política de privacidad está actualizada y accesible
+- [ ] La aplicación cumple con las políticas de Google Play Store
