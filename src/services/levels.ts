@@ -35,26 +35,73 @@ export const getLevelDefinitions = async () => {
 
 // Función para obtener el nivel actual del usuario
 export const getUserLevel = async () => {
-  const { data: { user } } = await supabase.auth.getUser();
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) {
-    return { userLevel: null, error: new Error('Usuario no autenticado') };
-  }
+    if (!user) {
+      return { userLevel: null, error: new Error('Usuario no autenticado') };
+    }
 
-  // Verificar si el usuario ya tiene un registro de nivel
-  const { data, error } = await supabase
-    .from('user_levels')
-    .select('*, level_definitions(*)')
-    .eq('user_id', user.id)
-    .single();
+    // Verificar si existe la tabla user_levels
+    try {
+      // Verificar si el usuario ya tiene un registro de nivel
+      const { data, error } = await supabase
+        .from('user_levels')
+        .select('*, level_definitions!inner(*)')
+        .eq('user_id', user.id)
+        .single();
 
-  if (error && error.code !== 'PGRST116') {
-    // Si el error no es "no se encontró registro", es un error real
-    return { userLevel: null, error };
-  }
+      if (error) {
+        // Si hay un error, verificar si es porque no se encontró el registro
+        if (error.code === 'PGRST116') {
+          // No se encontró registro, crear uno nuevo
+          console.log('No se encontró registro de nivel para el usuario, creando uno nuevo...');
+        } else {
+          // Es un error diferente, puede ser un problema con la relación o la tabla
+          console.error('Error al consultar nivel de usuario:', error);
 
-  // Si el usuario no tiene un registro de nivel, crearlo
-  if (!data) {
+          // Intentar obtener solo el nivel sin la relación
+          const { data: basicLevel, error: basicError } = await supabase
+            .from('user_levels')
+            .select('*')
+            .eq('user_id', user.id)
+            .single();
+
+          if (!basicError && basicLevel) {
+            // Si podemos obtener el nivel básico, intentar obtener la definición por separado
+            const { data: levelDef } = await supabase
+              .from('level_definitions')
+              .select('*')
+              .eq('level', basicLevel.level)
+              .single();
+
+            // Combinar manualmente
+            if (levelDef) {
+              const combinedLevel = {
+                ...basicLevel,
+                level_definitions: levelDef
+              };
+
+              return { userLevel: combinedLevel as UserLevel, error: null };
+            }
+
+            // Si no podemos obtener la definición, devolver solo el nivel básico
+            return { userLevel: basicLevel as UserLevel, error: null };
+          }
+
+          // Si no podemos obtener ni siquiera el nivel básico, crear uno nuevo
+        }
+      } else {
+        // Se encontró el registro, devolverlo
+        return { userLevel: data as UserLevel, error: null };
+      }
+    } catch (tableError) {
+      console.error('Error al acceder a la tabla user_levels:', tableError);
+      // Continuar con la creación de un nuevo nivel
+    }
+
+    // Si llegamos aquí, necesitamos crear un nuevo nivel para el usuario
+
     // Obtener el nivel 1
     const { data: levelOne, error: levelError } = await supabase
       .from('level_definitions')
@@ -63,40 +110,90 @@ export const getUserLevel = async () => {
       .single();
 
     if (levelError) {
-      return { userLevel: null, error: levelError };
+      console.error('Error al obtener definición de nivel 1:', levelError);
+      return {
+        userLevel: {
+          id: 0,
+          user_id: user.id,
+          level: 1,
+          total_xp: 0,
+          next_level_xp: 100,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          level_definitions: {
+            id: 1,
+            level: 1,
+            xp_required: 0,
+            title: 'Principiante',
+            description: 'Acabas de empezar tu aventura',
+            reward_description: null,
+            created_at: new Date().toISOString()
+          }
+        } as UserLevel,
+        error: null
+      };
     }
 
-    // Crear registro de nivel para el usuario
-    const { data: newLevel, error: createError } = await supabase
-      .from('user_levels')
-      .insert({
-        user_id: user.id,
-        level: 1,
-        total_xp: 0,
-        next_level_xp: levelOne.xp_required
-      })
-      .select('*')
-      .single();
+    try {
+      // Crear registro de nivel para el usuario
+      const { data: newLevel, error: createError } = await supabase
+        .from('user_levels')
+        .insert({
+          user_id: user.id,
+          level: 1,
+          total_xp: 0,
+          next_level_xp: levelOne.xp_required,
+          level_definition_id: levelOne.id
+        })
+        .select('*')
+        .single();
 
-    if (createError) {
-      return { userLevel: null, error: createError };
+      if (createError) {
+        console.error('Error al crear nivel de usuario:', createError);
+        // Devolver un nivel predeterminado en caso de error
+        return {
+          userLevel: {
+            id: 0,
+            user_id: user.id,
+            level: 1,
+            total_xp: 0,
+            next_level_xp: levelOne.xp_required,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            level_definitions: levelOne
+          } as UserLevel,
+          error: null
+        };
+      }
+
+      // Combinar manualmente el nivel con su definición
+      const userLevel = {
+        ...newLevel,
+        level_definitions: levelOne
+      };
+
+      return { userLevel: userLevel as UserLevel, error: null };
+    } catch (insertError) {
+      console.error('Error inesperado al crear nivel de usuario:', insertError);
+      // Devolver un nivel predeterminado en caso de error
+      return {
+        userLevel: {
+          id: 0,
+          user_id: user.id,
+          level: 1,
+          total_xp: 0,
+          next_level_xp: levelOne.xp_required,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          level_definitions: levelOne
+        } as UserLevel,
+        error: null
+      };
     }
-
-    // Obtener el nivel completo con la información
-    const { data: fullLevel, error: fullError } = await supabase
-      .from('user_levels')
-      .select('*, level_definitions(*)')
-      .eq('id', newLevel.id)
-      .single();
-
-    if (fullError) {
-      return { userLevel: null, error: fullError };
-    }
-
-    return { userLevel: fullLevel as UserLevel, error: null };
+  } catch (err) {
+    console.error('Error general en getUserLevel:', err);
+    return { userLevel: null, error: new Error('Error al obtener información de nivel') };
   }
-
-  return { userLevel: data as UserLevel, error: null };
 };
 
 // Función para calcular la experiencia basada en logros
@@ -136,97 +233,154 @@ export const calculateExperienceFromAchievements = async () => {
 
 // Función para actualizar el nivel del usuario
 export const updateUserLevel = async () => {
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { error: new Error('Usuario no autenticado') };
-  }
-
   try {
-    // Calcular XP basado en logros
-    const { xp, error: xpError } = await calculateExperienceFromAchievements();
+    const { data: { user } } = await supabase.auth.getUser();
 
-    if (xpError) {
-      throw xpError;
+    if (!user) {
+      console.error('Error: Usuario no autenticado en updateUserLevel');
+      return { leveledUp: false, newLevel: null, error: new Error('Usuario no autenticado') };
     }
 
-    // Obtener todas las definiciones de niveles
-    const { levelDefinitions, error: levelsError } = await getLevelDefinitions();
+    console.log('Actualizando nivel para usuario:', user.id);
 
-    if (levelsError) {
-      throw levelsError;
-    }
+    try {
+      // Calcular XP basado en logros
+      const { xp, error: xpError } = await calculateExperienceFromAchievements();
 
-    // Ordenar niveles por XP requerido (descendente)
-    const sortedLevels = [...levelDefinitions].sort((a, b) => b.xp_required - a.xp_required);
-
-    // Encontrar el nivel actual basado en XP
-    let currentLevel = 1;
-    let nextLevelXP = 100;
-
-    for (const level of sortedLevels) {
-      if (xp >= level.xp_required) {
-        currentLevel = level.level;
-
-        // Encontrar el siguiente nivel
-        const nextLevel = levelDefinitions.find(l => l.level === currentLevel + 1);
-        nextLevelXP = nextLevel ? nextLevel.xp_required : level.xp_required;
-
-        break;
-      }
-    }
-
-    // Verificar si el usuario ya tiene un registro de nivel
-    const { data: existingLevel, error: checkError } = await supabase
-      .from('user_levels')
-      .select('id, level')
-      .eq('user_id', user.id)
-      .single();
-
-    if (checkError && checkError.code !== 'PGRST116') {
-      throw checkError;
-    }
-
-    if (!existingLevel) {
-      // Crear nuevo registro
-      const { error: insertError } = await supabase
-        .from('user_levels')
-        .insert({
-          user_id: user.id,
-          level: currentLevel,
-          total_xp: xp,
-          next_level_xp: nextLevelXP,
-          updated_at: new Date().toISOString()
-        });
-
-      if (insertError) {
-        throw insertError;
-      }
-    } else {
-      // Actualizar registro existente
-      const { error: updateError } = await supabase
-        .from('user_levels')
-        .update({
-          level: currentLevel,
-          total_xp: xp,
-          next_level_xp: nextLevelXP,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', existingLevel.id);
-
-      if (updateError) {
-        throw updateError;
+      if (xpError) {
+        console.error('Error al calcular experiencia:', xpError);
+        throw xpError;
       }
 
-      // Verificar si el usuario subió de nivel
-      const leveledUp = currentLevel > existingLevel.level;
+      console.log('Experiencia total calculada:', xp);
 
-      return { leveledUp, newLevel: currentLevel, error: null };
+      // Obtener todas las definiciones de niveles
+      const { levelDefinitions, error: levelsError } = await getLevelDefinitions();
+
+      if (levelsError) {
+        console.error('Error al obtener definiciones de niveles:', levelsError);
+        throw levelsError;
+      }
+
+      if (!levelDefinitions || levelDefinitions.length === 0) {
+        console.error('No se encontraron definiciones de niveles');
+
+        // Crear nivel predeterminado si no hay definiciones
+        const { error: createLevelDefError } = await supabase
+          .from('level_definitions')
+          .insert({
+            level: 1,
+            xp_required: 0,
+            title: 'Principiante',
+            description: 'Acabas de empezar tu aventura',
+            created_at: new Date().toISOString()
+          });
+
+        if (createLevelDefError) {
+          console.error('Error al crear nivel predeterminado:', createLevelDefError);
+        }
+
+        // Usar valores predeterminados
+        return { leveledUp: false, newLevel: 1, error: null };
+      }
+
+      // Ordenar niveles por XP requerido (descendente)
+      const sortedLevels = [...levelDefinitions].sort((a, b) => b.xp_required - a.xp_required);
+
+      // Encontrar el nivel actual basado en XP
+      let currentLevel = 1;
+      let nextLevelXP = 100;
+
+      for (const level of sortedLevels) {
+        if (xp >= level.xp_required) {
+          currentLevel = level.level;
+
+          // Encontrar el siguiente nivel
+          const nextLevel = levelDefinitions.find(l => l.level === currentLevel + 1);
+          nextLevelXP = nextLevel ? nextLevel.xp_required : level.xp_required;
+
+          console.log(`Nivel determinado: ${currentLevel}, Siguiente nivel XP: ${nextLevelXP}`);
+          break;
+        }
+      }
+
+      try {
+        // Verificar si el usuario ya tiene un registro de nivel
+        const { data: existingLevel, error: checkError } = await supabase
+          .from('user_levels')
+          .select('id, level')
+          .eq('user_id', user.id)
+          .single();
+
+        if (checkError) {
+          if (checkError.code === 'PGRST116') {
+            console.log('No se encontró registro de nivel para el usuario, creando uno nuevo...');
+          } else {
+            console.error('Error al verificar nivel existente:', checkError);
+            throw checkError;
+          }
+        }
+
+        if (!existingLevel) {
+          console.log('Creando nuevo registro de nivel para el usuario');
+          // Crear nuevo registro
+          const { error: insertError } = await supabase
+            .from('user_levels')
+            .insert({
+              user_id: user.id,
+              level: currentLevel,
+              total_xp: xp,
+              next_level_xp: nextLevelXP,
+              updated_at: new Date().toISOString()
+            });
+
+          if (insertError) {
+            console.error('Error al insertar nivel:', insertError);
+            throw insertError;
+          }
+
+          console.log(`Nivel inicial creado: ${currentLevel}`);
+          return { leveledUp: true, newLevel: currentLevel, error: null };
+        } else {
+          console.log(`Nivel existente: ${existingLevel.level}, Nuevo nivel: ${currentLevel}`);
+
+          // Verificar si el usuario subió de nivel
+          const leveledUp = currentLevel > existingLevel.level;
+
+          if (leveledUp) {
+            console.log(`¡El usuario ha subido de nivel! ${existingLevel.level} -> ${currentLevel}`);
+          }
+
+          // Actualizar registro existente
+          const { error: updateError } = await supabase
+            .from('user_levels')
+            .update({
+              level: currentLevel,
+              total_xp: xp,
+              next_level_xp: nextLevelXP,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingLevel.id);
+
+          if (updateError) {
+            console.error('Error al actualizar nivel:', updateError);
+            throw updateError;
+          }
+
+          console.log('Nivel actualizado correctamente');
+          return { leveledUp, newLevel: currentLevel, error: null };
+        }
+      } catch (dbError) {
+        console.error('Error en operaciones de base de datos:', dbError);
+        return { leveledUp: false, newLevel: currentLevel, error: dbError };
+      }
+    } catch (innerError) {
+      console.error('Error en el proceso de actualización de nivel:', innerError);
+      return { leveledUp: false, newLevel: 1, error: innerError };
     }
-
-    return { leveledUp: false, newLevel: currentLevel, error: null };
-  } catch (error) {
-    return { leveledUp: false, newLevel: 1, error };
+  } catch (outerError) {
+    console.error('Error general en updateUserLevel:', outerError);
+    return { leveledUp: false, newLevel: null, error: outerError };
   }
 };
 

@@ -1,5 +1,119 @@
 import { supabase } from './supabase';
 
+// Función para obtener los logros predeterminados
+export const getDefaultAchievements = () => {
+  return [
+    {
+      code: 'first_game',
+      name: 'Primer Juego',
+      description: 'Juega tu primera partida',
+      icon: 'game-controller',
+      required_count: 1,
+      is_secret: false,
+      reward_description: 'Desbloquea nuevos modos de juego'
+    },
+    {
+      code: 'shot_taker',
+      name: 'Bebedor Valiente',
+      description: 'Toma 10 shots durante el juego',
+      icon: 'wine-glass',
+      required_count: 10,
+      is_secret: false,
+      reward_description: 'Desbloquea un nuevo modo de juego'
+    },
+    {
+      code: 'shot_master',
+      name: 'Maestro de Shots',
+      description: 'Toma un total de 50 shots',
+      icon: 'beer',
+      required_count: 50,
+      is_secret: false,
+      reward_description: 'Desbloquea un nuevo modo de juego'
+    },
+    {
+      code: 'truth_master',
+      name: 'Maestro de la Verdad',
+      description: 'Elige "Verdad" 20 veces',
+      icon: 'chatbubbles',
+      required_count: 20,
+      is_secret: false,
+      reward_description: null
+    },
+    {
+      code: 'dare_master',
+      name: 'Maestro del Reto',
+      description: 'Elige "Reto" 20 veces',
+      icon: 'flame',
+      required_count: 20,
+      is_secret: false,
+      reward_description: null
+    },
+    {
+      code: 'truth_seeker',
+      name: 'Buscador de Verdades',
+      description: 'Elige "Verdad" 20 veces consecutivas',
+      icon: 'search',
+      required_count: 20,
+      is_secret: true,
+      reward_description: 'Desbloquea preguntas especiales de verdad'
+    },
+    {
+      code: 'dare_devil',
+      name: 'Atrevido',
+      description: 'Elige "Reto" 20 veces consecutivas',
+      icon: 'flame-outline',
+      required_count: 20,
+      is_secret: true,
+      reward_description: 'Desbloquea retos especiales'
+    },
+    {
+      code: 'perfect_streak',
+      name: 'Racha Perfecta',
+      description: 'Completa 10 desafíos seguidos sin tomar shots',
+      icon: 'trophy',
+      required_count: 1,
+      is_secret: false,
+      reward_description: 'Desbloquea un nuevo modo de juego'
+    },
+    {
+      code: 'social_butterfly',
+      name: 'Mariposa Social',
+      description: 'Juega con 10 jugadores diferentes',
+      icon: 'people',
+      required_count: 10,
+      is_secret: false,
+      reward_description: null
+    },
+    {
+      code: 'night_owl',
+      name: 'Búho Nocturno',
+      description: 'Juega después de la medianoche',
+      icon: 'moon',
+      required_count: 1,
+      is_secret: true,
+      reward_description: 'Desbloquea preguntas nocturnas especiales'
+    },
+    {
+      code: 'weekend_warrior',
+      name: 'Guerrero de Fin de Semana',
+      description: 'Juega durante el fin de semana',
+      icon: 'calendar',
+      required_count: 1,
+      is_secret: false,
+      reward_description: null
+    },
+    {
+      code: 'extreme_player',
+      name: 'Jugador Extremo',
+      description: 'Juega en modo Extremo',
+      icon: 'warning',
+      required_count: 1,
+      is_secret: false,
+      reward_description: 'Desbloquea preguntas extremas adicionales'
+    }
+  ];
+};
+
 // Tipos para los logros
 export type Achievement = {
   id: number;
@@ -65,27 +179,71 @@ export const getUserAchievements = async (includeSecret: boolean = true) => {
       return { userAchievements: [], error: null };
     }
 
-    // Obtener todos los logros del usuario
-    const { data, error } = await supabase
-      .from('user_achievements')
-      .select('*, achievement:achievements(*)')
-      .eq('user_id', user.id);
+    try {
+      // Obtener todos los logros del usuario
+      const { data, error } = await supabase
+        .from('user_achievements')
+        .select('*, achievement:achievements(*)')
+        .eq('user_id', user.id);
 
-    if (error) {
-      console.error('Error al obtener logros del usuario:', error);
-      return { userAchievements: [], error };
+      if (error) {
+        console.error('Error al obtener logros del usuario:', error);
+
+        // Si hay un error específico de relación, intentar obtener los logros de otra manera
+        if (error.message && error.message.includes('relationship')) {
+          console.log('Intentando obtener logros sin relación...');
+
+          // Obtener los logros del usuario sin la relación
+          const { data: userAchievementsData, error: userAchievementsError } = await supabase
+            .from('user_achievements')
+            .select('*')
+            .eq('user_id', user.id);
+
+          if (userAchievementsError) {
+            console.error('Error al obtener logros básicos del usuario:', userAchievementsError);
+            return { userAchievements: [], error: userAchievementsError };
+          }
+
+          // Obtener todos los logros
+          const { achievements: allAchievements, error: allAchievementsError } = await getAchievements(true);
+
+          if (allAchievementsError) {
+            console.error('Error al obtener todos los logros:', allAchievementsError);
+            return { userAchievements: [], error: allAchievementsError };
+          }
+
+          // Combinar manualmente los datos
+          const combinedData = userAchievementsData.map(userAchievement => {
+            const achievement = allAchievements.find(a => a.id === userAchievement.achievement_id);
+            return {
+              ...userAchievement,
+              achievement
+            };
+          });
+
+          return {
+            userAchievements: combinedData as UserAchievement[],
+            error: null
+          };
+        }
+
+        return { userAchievements: [], error };
+      }
+
+      // Filtrar logros secretos si es necesario
+      let userAchievements = data as UserAchievement[];
+
+      if (!includeSecret) {
+        userAchievements = userAchievements.filter(ua =>
+          !ua.achievement?.is_secret || (ua.achievement?.is_secret && ua.unlocked)
+        );
+      }
+
+      return { userAchievements, error: null };
+    } catch (innerErr) {
+      console.error('Error interno en getUserAchievements:', innerErr);
+      return { userAchievements: [], error: innerErr };
     }
-
-    // Filtrar logros secretos si es necesario
-    let userAchievements = data as UserAchievement[];
-
-    if (!includeSecret) {
-      userAchievements = userAchievements.filter(ua =>
-        !ua.achievement?.is_secret || (ua.achievement?.is_secret && ua.unlocked)
-      );
-    }
-
-    return { userAchievements, error: null };
   } catch (err) {
     console.error('Error inesperado en getUserAchievements:', err);
     return { userAchievements: [], error: null };
@@ -215,6 +373,9 @@ export const initializeUserAchievements = async () => {
 
     console.log('Usuario autenticado para inicialización:', user.id);
 
+    // Verificar si todos los logros predefinidos existen en la base de datos
+    await ensureAllAchievementsExist();
+
     // Obtener todos los logros (incluyendo secretos)
     const { achievements, error: achievementsError } = await getAchievements(true);
 
@@ -282,6 +443,73 @@ export const initializeUserAchievements = async () => {
   }
 };
 
+// Función para asegurar que todos los logros predefinidos existan en la base de datos
+export const ensureAllAchievementsExist = async () => {
+  try {
+    console.log('Verificando que todos los logros predefinidos existan en la base de datos...');
+
+    // Obtener todos los logros predefinidos
+    const defaultAchievements = getDefaultAchievements();
+
+    // Obtener todos los logros existentes en la base de datos
+    const { data: existingAchievements, error } = await supabase
+      .from('achievements')
+      .select('code');
+
+    if (error) {
+      console.error('Error al obtener logros existentes:', error);
+      return;
+    }
+
+    // Crear un conjunto de códigos de logros que ya existen
+    const existingCodes = new Set(
+      (existingAchievements || []).map(item => item.code)
+    );
+
+    // Filtrar solo los logros que no existen en la base de datos
+    const achievementsToAdd = defaultAchievements.filter(
+      achievement => !existingCodes.has(achievement.code)
+    );
+
+    console.log(`Se necesitan crear ${achievementsToAdd.length} logros nuevos`);
+
+    if (achievementsToAdd.length === 0) {
+      console.log('Todos los logros predefinidos ya existen en la base de datos');
+      return;
+    }
+
+    // Crear los logros faltantes uno por uno para evitar errores
+    for (const achievement of achievementsToAdd) {
+      try {
+        console.log(`Creando logro: ${achievement.code} - ${achievement.name}`);
+
+        const { error: createError } = await supabase
+          .from('achievements')
+          .insert({
+            code: achievement.code,
+            name: achievement.name,
+            description: achievement.description,
+            icon: achievement.icon,
+            required_count: achievement.required_count,
+            is_secret: achievement.is_secret,
+            reward_description: achievement.reward_description,
+            created_at: new Date().toISOString()
+          });
+
+        if (createError) {
+          console.error(`Error al crear logro ${achievement.code}:`, createError);
+        } else {
+          console.log(`Logro ${achievement.code} creado correctamente`);
+        }
+      } catch (err) {
+        console.error(`Error inesperado al crear logro ${achievement.code}:`, err);
+      }
+    }
+  } catch (err) {
+    console.error('Error inesperado en ensureAllAchievementsExist:', err);
+  }
+};
+
 // Función para actualizar el progreso de un logro
 export const updateAchievementProgress = async (
   achievementCode: string,
@@ -289,97 +517,160 @@ export const updateAchievementProgress = async (
 ) => {
   console.log(`Actualizando progreso para logro: ${achievementCode}, incremento: ${increment}`);
 
-  const { data: { user } } = await supabase.auth.getUser();
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) {
-    console.error('Error: Usuario no autenticado');
-    return { error: new Error('Usuario no autenticado') };
-  }
+    if (!user) {
+      console.error('Error: Usuario no autenticado');
+      return { unlocked: false, error: new Error('Usuario no autenticado') };
+    }
 
-  console.log('Usuario autenticado:', user.id);
+    console.log('Usuario autenticado:', user.id);
 
-  // Obtener el ID del logro por su código
-  const { data: achievement, error: achievementError } = await supabase
-    .from('achievements')
-    .select('id, required_count, name')
-    .eq('code', achievementCode)
-    .single();
+    // Asegurarse de que todos los logros predefinidos existan en la base de datos
+    await ensureAllAchievementsExist();
 
-  if (achievementError) {
-    console.error(`Error al obtener logro ${achievementCode}:`, achievementError);
-    return { error: achievementError };
-  }
+    // Obtener el ID del logro por su código
+    const { data: achievement, error: achievementError } = await supabase
+      .from('achievements')
+      .select('id, required_count, name')
+      .eq('code', achievementCode)
+      .single();
 
-  console.log(`Logro encontrado: ${achievement.name} (ID: ${achievement.id}), requerido: ${achievement.required_count}`);
+    let achievementData;
 
-  // Obtener el registro actual del logro del usuario
-  const { data: userAchievement, error: userAchievementError } = await supabase
-    .from('user_achievements')
-    .select('id, progress, unlocked')
-    .eq('user_id', user.id)
-    .eq('achievement_id', achievement.id)
-    .single();
+    if (achievementError) {
+      // Si el logro no existe, es un error inesperado ya que acabamos de asegurarnos de que todos existan
+      console.error(`Error al obtener logro ${achievementCode} después de verificar existencia:`, achievementError);
 
-  console.log('Buscando registro de logro para usuario:',
-    userAchievement ? `Encontrado (progreso: ${userAchievement.progress})` : 'No encontrado');
+      // Intentar obtener el logro de la lista predefinida como fallback
+      const defaultAchievements = getDefaultAchievements();
+      const defaultAchievement = defaultAchievements.find(a => a.code === achievementCode);
 
-  if (userAchievementError) {
-    if (userAchievementError.code === 'PGRST116') {
-      console.log('No se encontró registro de logro para el usuario, inicializando...');
+      if (defaultAchievement) {
+        console.log(`Usando información predefinida para el logro ${achievementCode}`);
+
+        // Crear un objeto con la información predefinida y un ID temporal
+        achievementData = {
+          id: -1, // ID temporal
+          name: defaultAchievement.name,
+          required_count: defaultAchievement.required_count
+        };
+      } else {
+        console.error(`El logro ${achievementCode} no existe y no está en la lista predefinida`);
+        return { unlocked: false, error: new Error(`Logro ${achievementCode} no encontrado`) };
+      }
     } else {
-      console.error('Error al obtener registro de logro:', userAchievementError);
-      return { error: userAchievementError };
-    }
-  }
-
-  // Si el usuario no tiene este logro inicializado, inicializarlo
-  if (!userAchievement) {
-    console.log('Inicializando logros para el usuario...');
-    const initResult = await initializeUserAchievements();
-
-    if (initResult.error) {
-      console.error('Error al inicializar logros:', initResult.error);
-      return { error: initResult.error };
+      achievementData = achievement;
     }
 
-    console.log('Logros inicializados, obteniendo registro actualizado...');
+    console.log(`Logro encontrado: ${achievementData.name} (ID: ${achievementData.id}), requerido: ${achievementData.required_count}`);
 
-    // Intentar obtener el registro nuevamente
-    const { data: newUserAchievement, error: newError } = await supabase
+    // Obtener el registro actual del logro del usuario
+    const { data: userAchievement, error: userAchievementError } = await supabase
       .from('user_achievements')
       .select('id, progress, unlocked')
       .eq('user_id', user.id)
-      .eq('achievement_id', achievement.id)
+      .eq('achievement_id', achievementData.id)
       .single();
 
-    if (newError) {
-      console.error('Error al obtener registro actualizado:', newError);
-      return { error: newError };
+    console.log('Buscando registro de logro para usuario:',
+      userAchievement ? `Encontrado (progreso: ${userAchievement.progress})` : 'No encontrado');
+
+    // Si hay un error específico de "no se encontró registro", continuamos con la lógica
+    if (userAchievementError && userAchievementError.code !== 'PGRST116') {
+      console.error('Error al obtener registro de logro del usuario:', userAchievementError);
+      return { unlocked: false, error: userAchievementError };
     }
 
-    if (!newUserAchievement) {
-      console.error('No se pudo encontrar el registro después de inicializar');
-      return { error: new Error('No se pudo inicializar el logro') };
+    if (userAchievementError) {
+      if (userAchievementError.code === 'PGRST116') {
+        console.log('No se encontró registro de logro para el usuario, inicializando...');
+      } else {
+        console.error('Error al obtener registro de logro:', userAchievementError);
+        return { error: userAchievementError };
+      }
     }
 
-    console.log('Registro actualizado encontrado:', newUserAchievement);
+    // Si el usuario no tiene este logro inicializado, inicializarlo
+    if (!userAchievement) {
+      console.log('Inicializando logros para el usuario...');
+      const initResult = await initializeUserAchievements();
 
-    // Continuar con el nuevo registro
-    const userAchievementId = newUserAchievement.id;
-    const currentProgress = newUserAchievement.progress;
-    const isUnlocked = newUserAchievement.unlocked;
+      if (initResult.error) {
+        console.error('Error al inicializar logros:', initResult.error);
+        return { error: initResult.error };
+      }
+
+      console.log('Logros inicializados, obteniendo registro actualizado...');
+
+      // Intentar obtener el registro nuevamente
+      const { data: newUserAchievement, error: newError } = await supabase
+        .from('user_achievements')
+        .select('id, progress, unlocked')
+        .eq('user_id', user.id)
+        .eq('achievement_id', achievementData.id)
+        .single();
+
+      if (newError) {
+        console.error('Error al obtener registro actualizado:', newError);
+        return { error: newError };
+      }
+
+      if (!newUserAchievement) {
+        console.error('No se pudo encontrar el registro después de inicializar');
+        return { error: new Error('No se pudo inicializar el logro') };
+      }
+
+      console.log('Registro actualizado encontrado:', newUserAchievement);
+
+      // Continuar con el nuevo registro
+      const userAchievementId = newUserAchievement.id;
+      const currentProgress = newUserAchievement.progress;
+      const isUnlocked = newUserAchievement.unlocked;
+
+      // Si ya está desbloqueado, no hacer nada
+      if (isUnlocked) {
+        console.log('El logro ya está desbloqueado, no se actualiza');
+        return { unlocked: false, error: null };
+      }
+
+      // Calcular el nuevo progreso
+      const newProgress = currentProgress + increment;
+      const shouldUnlock = newProgress >= achievementData.required_count;
+
+      console.log(`Actualizando progreso: ${currentProgress} -> ${newProgress}, desbloquear: ${shouldUnlock}`);
+
+      // Actualizar el progreso
+      const { error: updateError } = await supabase
+        .from('user_achievements')
+        .update({
+          progress: newProgress,
+          unlocked: shouldUnlock,
+          unlocked_at: shouldUnlock ? new Date().toISOString() : null
+        })
+        .eq('id', userAchievementId);
+
+      if (updateError) {
+        console.error('Error al actualizar progreso:', updateError);
+      } else {
+        console.log('Progreso actualizado correctamente');
+      }
+
+      return { unlocked: shouldUnlock, error: updateError };
+    }
 
     // Si ya está desbloqueado, no hacer nada
-    if (isUnlocked) {
+    if (userAchievement.unlocked) {
       console.log('El logro ya está desbloqueado, no se actualiza');
       return { unlocked: false, error: null };
     }
 
     // Calcular el nuevo progreso
-    const newProgress = currentProgress + increment;
-    const shouldUnlock = newProgress >= achievement.required_count;
+    const newProgress = userAchievement.progress + increment;
+    const shouldUnlock = newProgress >= achievementData.required_count;
 
-    console.log(`Actualizando progreso: ${currentProgress} -> ${newProgress}, desbloquear: ${shouldUnlock}`);
+    console.log(`Actualizando progreso existente: ${userAchievement.progress} -> ${newProgress}, desbloquear: ${shouldUnlock}`);
 
     // Actualizar el progreso
     const { error: updateError } = await supabase
@@ -387,9 +678,10 @@ export const updateAchievementProgress = async (
       .update({
         progress: newProgress,
         unlocked: shouldUnlock,
-        unlocked_at: shouldUnlock ? new Date().toISOString() : null
+        unlocked_at: shouldUnlock ? new Date().toISOString() : null,
+        reward_claimed: false // Inicializar como no reclamado cuando se desbloquea
       })
-      .eq('id', userAchievementId);
+      .eq('id', userAchievement.id);
 
     if (updateError) {
       console.error('Error al actualizar progreso:', updateError);
@@ -397,45 +689,17 @@ export const updateAchievementProgress = async (
       console.log('Progreso actualizado correctamente');
     }
 
+    // Si se desbloqueó un logro, actualizar las estadísticas
+    if (shouldUnlock) {
+      console.log('¡Logro desbloqueado! Actualizando estadísticas...');
+      await updatePlayerStats();
+    }
+
     return { unlocked: shouldUnlock, error: updateError };
+  } catch (error) {
+    console.error('Error general en updateAchievementProgress:', error);
+    return { unlocked: false, error };
   }
-
-  // Si ya está desbloqueado, no hacer nada
-  if (userAchievement.unlocked) {
-    console.log('El logro ya está desbloqueado, no se actualiza');
-    return { unlocked: false, error: null };
-  }
-
-  // Calcular el nuevo progreso
-  const newProgress = userAchievement.progress + increment;
-  const shouldUnlock = newProgress >= achievement.required_count;
-
-  console.log(`Actualizando progreso existente: ${userAchievement.progress} -> ${newProgress}, desbloquear: ${shouldUnlock}`);
-
-  // Actualizar el progreso
-  const { error: updateError } = await supabase
-    .from('user_achievements')
-    .update({
-      progress: newProgress,
-      unlocked: shouldUnlock,
-      unlocked_at: shouldUnlock ? new Date().toISOString() : null,
-      reward_claimed: false // Inicializar como no reclamado cuando se desbloquea
-    })
-    .eq('id', userAchievement.id);
-
-  if (updateError) {
-    console.error('Error al actualizar progreso:', updateError);
-  } else {
-    console.log('Progreso actualizado correctamente');
-  }
-
-  // Si se desbloqueó un logro, actualizar las estadísticas
-  if (shouldUnlock) {
-    console.log('¡Logro desbloqueado! Actualizando estadísticas...');
-    await updatePlayerStats();
-  }
-
-  return { unlocked: shouldUnlock, error: updateError };
 };
 
 // Función para verificar y desbloquear múltiples logros a la vez

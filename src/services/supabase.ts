@@ -25,6 +25,15 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   // Global settings to improve performance
   global: {
     headers: { 'X-Client-Info': 'drink-app-mobile' },
+    // Increase timeout for better reliability on mobile networks
+    fetch: (url, options = {}) => {
+      const fetchOptions = {
+        ...options,
+        // Increase timeout to 30 seconds
+        timeout: 30000,
+      };
+      return fetch(url, fetchOptions);
+    },
   },
   // Reduce realtime subscription noise
   realtime: {
@@ -101,12 +110,87 @@ export const signUpWithEmail = async (email: string, password: string) => {
       };
     }
 
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
+    // Verificar la conexión a Supabase antes de intentar registrar
+    try {
+      // Hacer una petición simple para verificar la conexión
+      const { error: pingError } = await supabase.from('settings').select('key').limit(1);
 
-    return { data, error };
+      if (pingError) {
+        console.error('Error de conexión a Supabase:', pingError);
+        return {
+          data: null,
+          error: new Error('No se pudo conectar con el servidor. Por favor, verifica tu conexión a internet e inténtalo de nuevo.')
+        };
+      }
+    } catch (pingError) {
+      console.error('Error al verificar la conexión:', pingError);
+      return {
+        data: null,
+        error: new Error('No se pudo conectar con el servidor. Por favor, verifica tu conexión a internet e inténtalo de nuevo.')
+      };
+    }
+
+    // Intentar el registro con manejo de reintentos
+    let retries = 3;
+    let lastError = null;
+
+    while (retries > 0) {
+      try {
+        console.log(`Intento de registro ${4 - retries}/3...`);
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+
+        if (error) {
+          console.error(`Error en intento ${4 - retries}:`, error);
+          lastError = error;
+          retries--;
+
+          // Si es un error 503, esperar antes de reintentar
+          if (error.status === 503) {
+            console.log('Servicio temporalmente no disponible. Esperando antes de reintentar...');
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Esperar 2 segundos
+          } else {
+            // Si es otro tipo de error, no reintentar
+            break;
+          }
+        } else {
+          // Éxito, devolver los datos
+          return { data, error: null };
+        }
+      } catch (error) {
+        console.error(`Error en intento ${4 - retries}:`, error);
+        lastError = error;
+        retries--;
+
+        // Esperar antes de reintentar
+        if (retries > 0) {
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Esperar 2 segundos
+        }
+      }
+    }
+
+    // Si llegamos aquí, todos los intentos fallaron
+    console.error('Todos los intentos de registro fallaron:', lastError);
+
+    // Proporcionar un mensaje de error más descriptivo basado en el último error
+    let errorMessage = 'Error al registrarse. Por favor, inténtalo de nuevo más tarde.';
+
+    if (lastError) {
+      if (lastError.status === 503) {
+        errorMessage = 'El servicio está temporalmente no disponible. Por favor, inténtalo de nuevo más tarde.';
+      } else if (lastError.status === 429) {
+        errorMessage = 'Demasiados intentos. Por favor, espera unos minutos antes de intentarlo de nuevo.';
+      } else if (lastError.message && lastError.message.includes('already registered')) {
+        errorMessage = 'Este email ya está registrado. Por favor, inicia sesión o usa otro email.';
+      }
+    }
+
+    return {
+      data: null,
+      error: new Error(errorMessage)
+    };
   } catch (error) {
     console.error('Error en signUpWithEmail:', error);
     return {
@@ -126,12 +210,87 @@ export const signInWithEmail = async (email: string, password: string) => {
       };
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    // Verificar la conexión a Supabase antes de intentar iniciar sesión
+    try {
+      // Hacer una petición simple para verificar la conexión
+      const { error: pingError } = await supabase.from('settings').select('key').limit(1);
 
-    return { data, error };
+      if (pingError) {
+        console.error('Error de conexión a Supabase:', pingError);
+        return {
+          data: null,
+          error: new Error('No se pudo conectar con el servidor. Por favor, verifica tu conexión a internet e inténtalo de nuevo.')
+        };
+      }
+    } catch (pingError) {
+      console.error('Error al verificar la conexión:', pingError);
+      return {
+        data: null,
+        error: new Error('No se pudo conectar con el servidor. Por favor, verifica tu conexión a internet e inténtalo de nuevo.')
+      };
+    }
+
+    // Intentar el inicio de sesión con manejo de reintentos
+    let retries = 3;
+    let lastError = null;
+
+    while (retries > 0) {
+      try {
+        console.log(`Intento de inicio de sesión ${4 - retries}/3...`);
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (error) {
+          console.error(`Error en intento ${4 - retries}:`, error);
+          lastError = error;
+          retries--;
+
+          // Si es un error 503, esperar antes de reintentar
+          if (error.status === 503) {
+            console.log('Servicio temporalmente no disponible. Esperando antes de reintentar...');
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Esperar 2 segundos
+          } else {
+            // Si es otro tipo de error, no reintentar
+            break;
+          }
+        } else {
+          // Éxito, devolver los datos
+          return { data, error: null };
+        }
+      } catch (error) {
+        console.error(`Error en intento ${4 - retries}:`, error);
+        lastError = error;
+        retries--;
+
+        // Esperar antes de reintentar
+        if (retries > 0) {
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Esperar 2 segundos
+        }
+      }
+    }
+
+    // Si llegamos aquí, todos los intentos fallaron
+    console.error('Todos los intentos de inicio de sesión fallaron:', lastError);
+
+    // Proporcionar un mensaje de error más descriptivo basado en el último error
+    let errorMessage = 'Error al iniciar sesión. Por favor, inténtalo de nuevo más tarde.';
+
+    if (lastError) {
+      if (lastError.status === 503) {
+        errorMessage = 'El servicio está temporalmente no disponible. Por favor, inténtalo de nuevo más tarde.';
+      } else if (lastError.status === 429) {
+        errorMessage = 'Demasiados intentos. Por favor, espera unos minutos antes de intentarlo de nuevo.';
+      } else if (lastError.status === 400 || lastError.status === 401) {
+        errorMessage = 'Email o contraseña incorrectos. Por favor, verifica tus credenciales.';
+      }
+    }
+
+    return {
+      data: null,
+      error: new Error(errorMessage)
+    };
   } catch (error) {
     console.error('Error en signInWithEmail:', error);
     return {

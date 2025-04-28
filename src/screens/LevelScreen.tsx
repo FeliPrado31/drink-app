@@ -6,9 +6,11 @@ import {
   ScrollView,
   ActivityIndicator,
   TouchableOpacity,
-  RefreshControl
+  RefreshControl,
+  Alert
 } from 'react-native';
 import { useLevel } from '../context/LevelContext';
+import { useAuth } from '../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { ProgressBar } from 'react-native-paper';
 
@@ -18,10 +20,39 @@ type LevelScreenProps = {
 
 const LevelScreen: React.FC<LevelScreenProps> = ({ navigation }) => {
   const { userLevel, loading, error, rankingPosition, refreshLevel } = useLevel();
+  const { user, refreshSession } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+
+  // Efecto para verificar autenticación al cargar la pantalla
+  useEffect(() => {
+    if (error && error.includes('no autenticado') && retryCount < 3) {
+      handleAuthError();
+    }
+  }, [error, retryCount]);
+
+  const handleAuthError = async () => {
+    try {
+      console.log('Intentando recuperar sesión...');
+      await refreshSession();
+      setRetryCount(prev => prev + 1);
+      await refreshLevel();
+    } catch (err) {
+      console.error('Error al recuperar sesión:', err);
+    }
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
+
+    if (!user) {
+      try {
+        await refreshSession();
+      } catch (err) {
+        console.error('Error al refrescar sesión durante onRefresh:', err);
+      }
+    }
+
     await refreshLevel();
     setRefreshing(false);
   };
@@ -75,15 +106,47 @@ const LevelScreen: React.FC<LevelScreenProps> = ({ navigation }) => {
   }
 
   if (error) {
+    // Determinar el tipo de error para mostrar un mensaje adecuado
+    const isAuthError = error.includes('iniciar sesión') || error.includes('autenticado');
+    const errorMessage = isAuthError
+      ? 'Necesitas iniciar sesión para ver tu nivel'
+      : 'No se pudo cargar tu información de nivel';
+
+    // Registrar el error técnico en la consola para depuración
+    console.error('Error técnico en LevelScreen:', error);
+
     return (
       <View style={styles.centerContainer}>
-        <Text style={styles.errorText}>{error}</Text>
+        <Ionicons name="alert-circle-outline" size={60} color="#d32f2f" style={styles.errorIcon} />
+        <Text style={styles.errorText}>
+          {isAuthError ? 'Sesión no iniciada' : 'No se pudo cargar tu nivel'}
+        </Text>
+        <Text style={styles.errorSubtext}>
+          {isAuthError
+            ? 'Es posible que tu sesión haya expirado. Intenta iniciar sesión nuevamente.'
+            : 'Ocurrió un problema al cargar tu información de nivel. Por favor, inténtalo de nuevo más tarde.'}
+        </Text>
         <TouchableOpacity
           style={styles.retryButton}
-          onPress={refreshLevel}
+          onPress={async () => {
+            if (isAuthError) {
+              // Si es error de autenticación, intentar refrescar la sesión primero
+              await refreshSession();
+            }
+            refreshLevel();
+          }}
         >
           <Text style={styles.retryButtonText}>Reintentar</Text>
         </TouchableOpacity>
+
+        {isAuthError && (
+          <TouchableOpacity
+            style={styles.loginButton}
+            onPress={() => navigation.navigate('Login')}
+          >
+            <Text style={styles.loginButtonText}>Ir a Iniciar Sesión</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   }
@@ -382,21 +445,49 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
   },
+  errorIcon: {
+    marginBottom: 16,
+  },
   errorText: {
     color: '#d32f2f',
-    fontSize: 16,
+    fontSize: 18,
+    fontWeight: 'bold',
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: 8,
+  },
+  errorSubtext: {
+    color: '#666',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 24,
+    paddingHorizontal: 20,
   },
   retryButton: {
     backgroundColor: '#ff5722',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 4,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+    width: '80%',
+    alignItems: 'center',
   },
   retryButtonText: {
     color: 'white',
     fontWeight: 'bold',
+    fontSize: 16,
+  },
+  loginButton: {
+    backgroundColor: '#2196f3',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    width: '80%',
+    alignItems: 'center',
+  },
+  loginButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
 });
 

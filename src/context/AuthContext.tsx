@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
 import { supabase } from '../services/supabase';
 import { Session, User } from '@supabase/supabase-js';
+import { initializeUserAchievements, ensureAllAchievementsExist } from '../services/achievements';
 
 // Definir el tipo para el contexto
 type AuthContextType = {
@@ -82,6 +83,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             // Actualizar el tiempo de la última verificación
             lastSessionCheckRef.current = Date.now();
+
+            // Si el usuario inició sesión, inicializar sus logros
+            if (event === 'SIGNED_IN' && newSession?.user) {
+              console.log('Usuario inició sesión, inicializando logros...');
+              try {
+                // Asegurarse de que todos los logros predefinidos existan
+                await ensureAllAchievementsExist();
+                // Inicializar los logros del usuario
+                await initializeUserAchievements();
+              } catch (error) {
+                console.error('Error al inicializar logros después de iniciar sesión:', error);
+              }
+            }
           }
         );
 
@@ -125,6 +139,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.error('Error de inicio de sesión:', JSON.stringify(error));
       } else {
         console.log('Inicio de sesión exitoso. Usuario:', data.user?.email);
+
+        // Inicializar los logros del usuario
+        try {
+          console.log('Inicializando logros después de inicio de sesión manual...');
+          // Asegurarse de que todos los logros predefinidos existan
+          await ensureAllAchievementsExist();
+          // Inicializar los logros del usuario
+          await initializeUserAchievements();
+        } catch (error) {
+          console.error('Error al inicializar logros después de inicio de sesión manual:', error);
+        }
       }
 
       return { error };
@@ -138,7 +163,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUp = async (email: string, password: string) => {
     try {
-      const { error } = await supabase.auth.signUp({ email, password });
+      const { data, error } = await supabase.auth.signUp({ email, password });
       if (error) {
         // Registrar el error detalladamente en la consola
         console.error('Error al registrarse:', error);
@@ -147,6 +172,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           message: error.message,
           status: error.status
         });
+      } else if (data.user) {
+        console.log('Registro exitoso. Usuario:', data.user.email);
+
+        // Inicializar los logros del usuario
+        try {
+          console.log('Inicializando logros después de registro...');
+          // Asegurarse de que todos los logros predefinidos existan
+          await ensureAllAchievementsExist();
+          // Inicializar los logros del usuario
+          await initializeUserAchievements();
+        } catch (initError) {
+          console.error('Error al inicializar logros después de registro:', initError);
+        }
       }
       return { error };
     } catch (error) {
