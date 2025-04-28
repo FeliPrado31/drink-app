@@ -311,15 +311,34 @@ export const updateUserLevel = async () => {
     console.log('Actualizando nivel para usuario:', user.id);
 
     try {
-      // Calcular XP basado en logros
-      const { xp, error: xpError } = await calculateExperienceFromAchievements();
+      // Obtener el nivel actual del usuario directamente de la base de datos
+      const { data: userLevelData, error: userLevelError } = await supabase
+        .from('user_levels')
+        .select('id, level, total_xp')
+        .eq('user_id', user.id)
+        .single();
 
-      if (xpError) {
-        console.error('Error al calcular experiencia:', xpError);
-        throw xpError;
+      if (userLevelError && userLevelError.code !== 'PGRST116') {
+        console.error('Error al obtener nivel actual del usuario:', userLevelError);
+        throw userLevelError;
       }
 
-      console.log('Experiencia total calculada:', xp);
+      // Si no hay nivel de usuario, usar valores predeterminados
+      const currentXP = userLevelData?.total_xp || 0;
+      console.log('XP actual obtenida directamente de la base de datos:', currentXP);
+
+      // Calcular XP adicional basado en logros (solo para complementar)
+      const { xp: achievementXP, error: xpError } = await calculateExperienceFromAchievements();
+
+      if (xpError) {
+        console.error('Error al calcular experiencia de logros:', xpError);
+        // No lanzamos error, continuamos con la XP actual
+      }
+
+      // Usar la XP de la base de datos como fuente principal de verdad
+      // Solo usar la XP de logros si no hay XP en la base de datos
+      const totalXP = currentXP > 0 ? currentXP : (achievementXP || 0);
+      console.log('Experiencia total a utilizar:', totalXP);
 
       // Obtener todas las definiciones de niveles
       const { levelDefinitions, error: levelsError } = await getLevelDefinitions();
@@ -359,7 +378,7 @@ export const updateUserLevel = async () => {
       let nextLevelXP = 100;
 
       for (const level of sortedLevels) {
-        if (xp >= level.xp_required) {
+        if (totalXP >= level.xp_required) {
           currentLevel = level.level;
 
           // Encontrar el siguiente nivel
@@ -373,22 +392,7 @@ export const updateUserLevel = async () => {
 
       try {
         // Verificar si el usuario ya tiene un registro de nivel
-        const { data: existingLevel, error: checkError } = await supabase
-          .from('user_levels')
-          .select('id, level')
-          .eq('user_id', user.id)
-          .single();
-
-        if (checkError) {
-          if (checkError.code === 'PGRST116') {
-            console.log('No se encontró registro de nivel para el usuario, creando uno nuevo...');
-          } else {
-            console.error('Error al verificar nivel existente:', checkError);
-            throw checkError;
-          }
-        }
-
-        if (!existingLevel) {
+        if (!userLevelData) {
           console.log('Creando nuevo registro de nivel para el usuario');
           // Crear nuevo registro
           const { error: insertError } = await supabase
@@ -396,7 +400,7 @@ export const updateUserLevel = async () => {
             .insert({
               user_id: user.id,
               level: currentLevel,
-              total_xp: xp,
+              total_xp: totalXP,
               next_level_xp: nextLevelXP,
               updated_at: new Date().toISOString()
             });
@@ -409,13 +413,13 @@ export const updateUserLevel = async () => {
           console.log(`Nivel inicial creado: ${currentLevel}`);
           return { leveledUp: true, newLevel: currentLevel, error: null };
         } else {
-          console.log(`Nivel existente: ${existingLevel.level}, Nuevo nivel: ${currentLevel}`);
+          console.log(`Nivel existente: ${userLevelData.level}, Nuevo nivel: ${currentLevel}`);
 
           // Verificar si el usuario subió de nivel
-          const leveledUp = currentLevel > existingLevel.level;
+          const leveledUp = currentLevel > userLevelData.level;
 
           if (leveledUp) {
-            console.log(`¡El usuario ha subido de nivel! ${existingLevel.level} -> ${currentLevel}`);
+            console.log(`¡El usuario ha subido de nivel! ${userLevelData.level} -> ${currentLevel}`);
           }
 
           // Actualizar registro existente
@@ -423,11 +427,11 @@ export const updateUserLevel = async () => {
             .from('user_levels')
             .update({
               level: currentLevel,
-              total_xp: xp,
+              // No actualizamos total_xp aquí para evitar sobrescribir la XP acumulada
               next_level_xp: nextLevelXP,
               updated_at: new Date().toISOString()
             })
-            .eq('id', existingLevel.id);
+            .eq('id', userLevelData.id);
 
           if (updateError) {
             console.error('Error al actualizar nivel:', updateError);
@@ -635,22 +639,66 @@ export const addExperiencePoints = async (xpAmount: number, action: string) => {
 
     console.log(`Añadiendo ${adjustedXP} puntos de experiencia (ajustado de ${xpAmount}) por acción: ${action}`);
 
-    // Obtener el nivel actual del usuario
-    const { userLevel, error: levelError } = await getUserLevel();
+    // Obtener el nivel actual del usuario directamente de la base de datos
+    const { data: userLevelData, error: userLevelError } = await supabase
+      .from('user_levels')
+      .select('id, total_xp')
+      .eq('user_id', user.id)
+      .single();
 
-    if (levelError) {
-      console.error('Error al obtener nivel del usuario:', levelError);
-      return { success: false, error: levelError };
+    if (userLevelError && userLevelError.code !== 'PGRST116') {
+      console.error('Error al obtener nivel del usuario:', userLevelError);
+      return { success: false, error: userLevelError };
     }
 
-    if (!userLevel) {
-      console.error('No se pudo obtener el nivel del usuario');
-      return { success: false, error: new Error('No se pudo obtener el nivel del usuario') };
+    // Si no existe un registro de nivel, crearlo
+    if (!userLevelData) {
+      console.log('No se encontró registro de nivel, creando uno nuevo...');
+
+      // Crear un nuevo registro de nivel
+      const { error: insertError } = await supabase
+        .from('user_levels')
+        .insert({
+          user_id: user.id,
+          level: 1,
+          total_xp: adjustedXP,
+          next_level_xp: 100,
+          updated_at: new Date().toISOString()
+        });
+
+      if (insertError) {
+        console.error('Error al crear nivel de usuario:', insertError);
+        return { success: false, error: insertError };
+      }
+
+      console.log(`Nivel inicial creado con ${adjustedXP} XP`);
+
+      // Verificar si el usuario ha subido de nivel
+      setTimeout(async () => {
+        try {
+          const { leveledUp, newLevel } = await updateUserLevel();
+          if (leveledUp) {
+            console.log(`¡El usuario ha subido al nivel ${newLevel}!`);
+          }
+        } catch (levelError) {
+          console.error('Error al verificar subida de nivel:', levelError);
+        }
+      }, 500);
+
+      return {
+        success: true,
+        leveledUp: false,
+        newLevel: 1,
+        newTotalXP: adjustedXP,
+        xpAwarded: adjustedXP,
+        error: null
+      };
     }
 
     // Calcular la nueva XP total
-    const newTotalXP = userLevel.total_xp + adjustedXP;
-    console.log(`XP actual: ${userLevel.total_xp}, Nueva XP: ${newTotalXP}`);
+    const currentXP = userLevelData.total_xp || 0;
+    const newTotalXP = currentXP + adjustedXP;
+    console.log(`XP actual: ${currentXP}, Nueva XP: ${newTotalXP}`);
 
     // Actualizar la XP en la base de datos
     const { error: updateError } = await supabase
@@ -659,7 +707,7 @@ export const addExperiencePoints = async (xpAmount: number, action: string) => {
         total_xp: newTotalXP,
         updated_at: new Date().toISOString()
       })
-      .eq('user_id', user.id);
+      .eq('id', userLevelData.id);
 
     if (updateError) {
       console.error('Error al actualizar XP:', updateError);
@@ -668,17 +716,18 @@ export const addExperiencePoints = async (xpAmount: number, action: string) => {
 
     console.log('XP actualizada correctamente');
 
-    // Verificar si el usuario ha subido de nivel
-    const { leveledUp, newLevel, error: updateLevelError } = await updateUserLevel();
-
-    if (updateLevelError) {
-      console.error('Error al actualizar nivel:', updateLevelError);
-      // No retornamos error aquí, ya que la XP se actualizó correctamente
-    }
-
-    if (leveledUp) {
-      console.log(`¡El usuario ha subido al nivel ${newLevel}!`);
-    }
+    // Verificar si el usuario ha subido de nivel en segundo plano
+    // para evitar bloquear la respuesta
+    setTimeout(async () => {
+      try {
+        const { leveledUp, newLevel } = await updateUserLevel();
+        if (leveledUp) {
+          console.log(`¡El usuario ha subido al nivel ${newLevel}!`);
+        }
+      } catch (levelError) {
+        console.error('Error al verificar subida de nivel:', levelError);
+      }
+    }, 500);
 
     // Registrar la acción en las estadísticas del jugador (si existe la tabla)
     try {
@@ -694,7 +743,7 @@ export const addExperiencePoints = async (xpAmount: number, action: string) => {
       }
 
       // Valores predeterminados si no hay estadísticas previas
-      const currentXP = currentStats?.total_xp_earned || 0;
+      const statsXP = currentStats?.total_xp_earned || 0;
       const currentActions = currentStats?.actions_count || 0;
 
       // Actualizar o insertar estadísticas
@@ -704,7 +753,7 @@ export const addExperiencePoints = async (xpAmount: number, action: string) => {
           user_id: user.id,
           last_action: action,
           last_action_time: new Date().toISOString(),
-          total_xp_earned: currentXP + adjustedXP,
+          total_xp_earned: statsXP + adjustedXP,
           actions_count: currentActions + 1,
           updated_at: new Date().toISOString()
         });
@@ -720,8 +769,7 @@ export const addExperiencePoints = async (xpAmount: number, action: string) => {
 
     return {
       success: true,
-      leveledUp,
-      newLevel,
+      leveledUp: false, // No esperamos a la verificación de nivel para responder más rápido
       newTotalXP,
       xpAwarded: adjustedXP,
       error: null

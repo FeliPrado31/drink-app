@@ -19,9 +19,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 type HomeScreenProps = {
   navigation: any;
+  route?: {
+    params?: {
+      refresh?: boolean;
+    };
+  };
 };
 
-const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
+const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, route }) => {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [initializing, setInitializing] = useState(true);
   const [showTip, setShowTip] = useState(true);
@@ -31,56 +36,76 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   // Obtener dimensiones de la pantalla
   const screenWidth = Dimensions.get('window').width;
 
-  useEffect(() => {
-    // Get current user when component mounts
-    const fetchUser = async () => {
-      try {
-        console.log('Obteniendo usuario actual...');
-        const { user, error } = await getCurrentUser();
+  // Función para cargar datos del usuario y actualizar la información
+  const loadUserData = async (showLoading = true) => {
+    if (showLoading) {
+      setInitializing(true);
+    }
 
-        if (error) {
-          console.error('Error al obtener usuario:', error);
-          return;
-        }
+    try {
+      console.log('Obteniendo usuario actual...');
+      const { user, error } = await getCurrentUser();
 
-        if (user) {
-          console.log('Usuario autenticado:', user.email);
-          setUserEmail(user.email);
-
-          // Inicializar logros cuando el usuario inicia sesión
-          console.log('Inicializando logros para el usuario...');
-          await refreshAchievements();
-
-          // Verificar logro de regreso (si el usuario vuelve después de un tiempo)
-          try {
-            const lastLogin = await AsyncStorage.getItem('lastLogin');
-            const now = new Date().getTime();
-
-            if (lastLogin) {
-              const daysSinceLastLogin = (now - parseInt(lastLogin)) / (1000 * 60 * 60 * 24);
-              console.log(`Días desde último inicio de sesión: ${daysSinceLastLogin.toFixed(1)}`);
-
-              if (daysSinceLastLogin >= 30) {
-                console.log('¡El usuario ha vuelto después de 30 días! Desbloqueando logro...');
-                trackAchievements([{ code: 'comeback_kid' }]);
-              }
-            }
-
-            // Guardar la fecha de inicio de sesión actual
-            await AsyncStorage.setItem('lastLogin', now.toString());
-          } catch (storageError) {
-            console.error('Error al acceder al almacenamiento:', storageError);
-          }
-        }
-      } catch (err) {
-        console.error('Error inesperado:', err);
-      } finally {
-        setInitializing(false);
+      if (error) {
+        console.error('Error al obtener usuario:', error);
+        return;
       }
-    };
 
-    fetchUser();
+      if (user) {
+        console.log('Usuario autenticado:', user.email);
+        setUserEmail(user.email);
+
+        // Inicializar logros cuando el usuario inicia sesión
+        console.log('Inicializando logros para el usuario...');
+        await refreshAchievements();
+
+        // Verificar logro de regreso (si el usuario vuelve después de un tiempo)
+        try {
+          const lastLogin = await AsyncStorage.getItem('lastLogin');
+          const now = new Date().getTime();
+
+          if (lastLogin) {
+            const daysSinceLastLogin = (now - parseInt(lastLogin)) / (1000 * 60 * 60 * 24);
+            console.log(`Días desde último inicio de sesión: ${daysSinceLastLogin.toFixed(1)}`);
+
+            if (daysSinceLastLogin >= 30) {
+              console.log('¡El usuario ha vuelto después de 30 días! Desbloqueando logro...');
+              trackAchievements([{ code: 'comeback_kid' }]);
+            }
+          }
+
+          // Guardar la fecha de inicio de sesión actual
+          await AsyncStorage.setItem('lastLogin', now.toString());
+        } catch (storageError) {
+          console.error('Error al acceder al almacenamiento:', storageError);
+        }
+      }
+    } catch (err) {
+      console.error('Error inesperado:', err);
+    } finally {
+      setInitializing(false);
+    }
+  };
+
+  // Efecto para cargar datos cuando el componente se monta
+  useEffect(() => {
+    loadUserData();
   }, []);
+
+  // Efecto para recargar datos cuando se recibe el parámetro refresh
+  useEffect(() => {
+    if (route?.params?.refresh) {
+      console.log('Recargando datos después de terminar partida...');
+      // Recargar sin mostrar el indicador de carga completo
+      loadUserData(false);
+
+      // Limpiar el parámetro de refresh para evitar recargas innecesarias
+      // Usar setTimeout para evitar actualizar el estado durante el renderizado
+      setTimeout(() => {
+        navigation.setParams({ refresh: undefined });
+      }, 100);
+    }
+  }, [route?.params?.refresh, loadUserData, navigation]);
 
   const handleSignOut = async () => {
     const { error } = await signOut();

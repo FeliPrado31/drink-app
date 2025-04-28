@@ -13,9 +13,9 @@ import {
 import { Button, Icon } from 'react-native-elements';
 import { getRandomQuestion, Question, Player } from '../services/supabase';
 import { useAchievements } from '../context/AchievementsContext';
+import { useLevel } from '../context/LevelContext';
 import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
-import { addExperiencePoints } from '../services/levels';
 
 type GameScreenProps = {
   navigation: any;
@@ -50,8 +50,9 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation, route }) => {
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
 
-  // Acceder al contexto de logros
+  // Acceder a los contextos
   const { trackAchievements, updateStats } = useAchievements();
+  const { addXP, showXPToast } = useLevel();
 
   // Estado para rastrear ubicaciones
   const [locations, setLocations] = useState<Set<string>>(new Set());
@@ -163,19 +164,12 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation, route }) => {
       try {
         // Dar más XP si es modo Extremo
         const xpAmount = modeName === 'Extremo' ? 50 : 25;
-        const result = await addExperiencePoints(xpAmount, `Inició juego en modo ${modeName}`);
+        const success = await addXP(xpAmount, `Inició juego en modo ${modeName}`);
 
-        // Si hay límites, mostrar un mensaje sutil pero permitir continuar
-        if (!result.success && result.limitReached) {
-          Alert.alert(
-            'Límite de XP diario',
-            'Has alcanzado el límite de XP por hoy, pero puedes seguir jugando normalmente.',
-            [{ text: 'Entendido' }]
-          );
-        } else if (result.success && players.length > 1) {
-          // Dar XP adicional por cada jugador solo si no se alcanzó el límite
-          // (incentiva jugar con más amigos)
-          await addExperiencePoints(players.length * 5, `Jugó con ${players.length} jugadores`);
+        // Si hay jugadores adicionales, dar XP extra
+        if (success && players.length > 1) {
+          // Dar XP adicional por cada jugador
+          await addXP(players.length * 5, `Jugó con ${players.length} jugadores`);
         }
       } catch (error) {
         console.error('Error al añadir puntos de experiencia por iniciar juego:', error);
@@ -306,6 +300,23 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation, route }) => {
     }
   };
 
+  // Función para otorgar XP por acciones específicas durante el juego
+  const awardGameXP = async (action: string, xpAmount: number) => {
+    try {
+      const success = await addXP(xpAmount, action);
+      if (success) {
+        console.log(`Se otorgaron puntos de XP por ${action}`);
+        return true;
+      } else {
+        console.log(`No se pudo otorgar XP por ${action}`);
+        return false;
+      }
+    } catch (error) {
+      console.error(`Error al otorgar XP por ${action}:`, error);
+      return false;
+    }
+  };
+
   const handleTruth = () => {
     // Mostrar la pregunta inmediatamente para mejorar la experiencia del usuario
     fetchQuestion('truth');
@@ -320,20 +331,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation, route }) => {
     setTimeout(async () => {
       try {
         // Añadir puntos de experiencia (10 XP por elegir verdad)
-        const result = await addExperiencePoints(10, 'Eligió verdad');
-
-        // Si la acción está en cooldown o se alcanzó un límite, solo mostrar mensaje
-        if (!result.success) {
-          if (result.cooldown) {
-            console.log('Acción en cooldown, ignorando');
-            return;
-          }
-
-          if (result.limitReached) {
-            console.log('Límite de XP alcanzado para verdad');
-            return;
-          }
-        }
+        await addXP(10, 'Eligió verdad');
 
         // Verificar logro de maestro de la verdad
         trackAchievements([{ code: 'truth_master' }]);
@@ -365,20 +363,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation, route }) => {
     setTimeout(async () => {
       try {
         // Añadir puntos de experiencia (15 XP por elegir reto - más que verdad porque es más arriesgado)
-        const result = await addExperiencePoints(15, 'Eligió reto');
-
-        // Si la acción está en cooldown o se alcanzó un límite, solo mostrar mensaje
-        if (!result.success) {
-          if (result.cooldown) {
-            console.log('Acción en cooldown, ignorando');
-            return;
-          }
-
-          if (result.limitReached) {
-            console.log('Límite de XP alcanzado para reto');
-            return;
-          }
-        }
+        await addXP(15, 'Eligió reto');
 
         // Verificar logro de maestro del reto
         trackAchievements([{ code: 'dare_master' }]);
@@ -404,20 +389,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation, route }) => {
     setTimeout(async () => {
       try {
         // Añadir puntos de experiencia (5 XP por elegir aleatorio)
-        const result = await addExperiencePoints(5, 'Eligió aleatorio');
-
-        // Si la acción está en cooldown o se alcanzó un límite, solo mostrar mensaje
-        if (!result.success) {
-          if (result.cooldown) {
-            console.log('Acción en cooldown, ignorando');
-            return;
-          }
-
-          if (result.limitReached) {
-            console.log('Límite de XP alcanzado para aleatorio');
-            return;
-          }
-        }
+        await addXP(5, 'Eligió aleatorio');
       } catch (error) {
         console.error('Error al añadir puntos de experiencia:', error);
       }
@@ -506,7 +478,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation, route }) => {
     setTimeout(async () => {
       try {
         // Añadir puntos de experiencia (3 XP por cada shot tomado)
-        const result = await addExperiencePoints(3 * shotCount, 'Tomó shots');
+        await addXP(3 * shotCount, 'Tomó shots');
 
         // Verificar logro de bebedor valiente
         trackAchievements([{ code: 'shot_taker', increment: shotCount }]);
@@ -542,7 +514,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation, route }) => {
     setTimeout(async () => {
       try {
         // Añadir puntos de experiencia (20 XP por completar un desafío)
-        const result = await addExperiencePoints(20, 'Completó desafío');
+        await addXP(20, 'Completó desafío');
 
         // Verificar logro de racha perfecta
         if (shotCount >= 10) {
@@ -784,9 +756,84 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation, route }) => {
                   },
                   {
                     text: "Terminar",
-                    onPress: () => {
-                      // Navegar a la pantalla de inicio (Home)
-                      navigation.navigate('Home');
+                    onPress: async () => {
+                      try {
+                        // Mostrar indicador de carga
+                        Alert.alert(
+                          "Guardando progreso",
+                          "Estamos guardando tu progreso y calculando la XP ganada...",
+                          [],
+                          { cancelable: false }
+                        );
+
+                        // Actualizar estadísticas finales primero
+                        await updateStats({
+                          total_games: 1,
+                          last_played_at: new Date().toISOString()
+                        });
+
+                        // Calcular XP basada en la duración y actividad del juego
+                        const gameXP = 30 + (gameStats.truthCount * 5) + (gameStats.dareCount * 8) + (gameStats.shotsTaken * 3);
+
+                        // Otorgar XP por completar la partida
+                        const success = await addXP(gameXP, 'Completó partida');
+
+                        // Cerrar el diálogo de carga
+                        // (No es necesario cerrar explícitamente ya que mostraremos otro diálogo)
+
+                        if (success) {
+                          console.log(`Se otorgaron ${gameXP} puntos de XP por completar la partida`);
+
+                          // Mostrar mensaje de XP ganada
+                          Alert.alert(
+                            "¡XP Ganada!",
+                            `Has ganado ${gameXP} puntos de experiencia en esta partida.`,
+                            [
+                              {
+                                text: "¡Genial!",
+                                onPress: () => {
+                                  // Navegar a la pantalla de inicio (Home)
+                                  navigation.navigate('Home', { refresh: true });
+                                }
+                              }
+                            ]
+                          );
+                        } else {
+                          console.log('No se pudo otorgar XP por completar la partida');
+
+                          // Mostrar mensaje de error
+                          Alert.alert(
+                            "Error al guardar XP",
+                            "No se pudo guardar correctamente la XP ganada, pero tus estadísticas han sido actualizadas.",
+                            [
+                              {
+                                text: "Entendido",
+                                onPress: () => {
+                                  // Navegar a la pantalla de inicio (Home)
+                                  navigation.navigate('Home', { refresh: true });
+                                }
+                              }
+                            ]
+                          );
+                        }
+                      } catch (error) {
+                        console.error('Error al procesar XP de fin de partida:', error);
+
+                        // Mostrar mensaje de error
+                        Alert.alert(
+                          "Error",
+                          "Ocurrió un error al guardar tu progreso. Por favor, inténtalo de nuevo.",
+                          [
+                            {
+                              text: "Entendido",
+                              onPress: () => {
+                                // Navegar a la pantalla de inicio (Home)
+                                navigation.navigate('Home', { refresh: true });
+                              }
+                            }
+                          ]
+                        );
+                      }
                     }
                   }
                 ]

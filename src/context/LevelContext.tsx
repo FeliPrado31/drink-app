@@ -4,14 +4,15 @@ import {
   UserLevel,
   getUserLevel,
   updateUserLevel,
-  getLevelReward
+  getLevelReward,
+  addExperiencePoints
 } from '../services/levels';
 import {
   updateUserRanking,
   getUserRankingPosition,
   RankingEntry
 } from '../services/ranking';
-import { Alert } from 'react-native';
+import { Alert, ToastAndroid, Platform } from 'react-native';
 import { useAuth } from './AuthContext';
 import { supabase } from '../services/supabase';
 
@@ -23,6 +24,8 @@ type LevelContextType = {
   rankingPosition: number | null;
   refreshLevel: () => Promise<void>;
   checkLevelUp: () => Promise<boolean>;
+  addXP: (amount: number, action: string) => Promise<boolean>;
+  showXPToast: (amount: number, action: string) => void;
 };
 
 const LevelContext = createContext<LevelContextType>({
@@ -33,6 +36,8 @@ const LevelContext = createContext<LevelContextType>({
   rankingPosition: null,
   refreshLevel: async () => {},
   checkLevelUp: async () => false,
+  addXP: async () => false,
+  showXPToast: () => {},
 });
 
 export const useLevel = () => useContext(LevelContext);
@@ -66,27 +71,47 @@ export const LevelProvider: React.FC<LevelProviderProps> = ({ children }) => {
     }
   };
 
-  const fetchUserLevel = useCallback(async () => {
+  // Caché para evitar cargas repetidas
+  const [lastFetchTime, setLastFetchTime] = useState<number>(0);
+  const CACHE_DURATION = 30000; // 30 segundos en milisegundos
+  const [fetchAttempts, setFetchAttempts] = useState<number>(0);
+  const MAX_FETCH_ATTEMPTS = 3; // Máximo número de intentos consecutivos
+
+  const fetchUserLevel = useCallback(async (forceRefresh = false) => {
     try {
+      // Verificar si debemos usar la caché
+      const now = Date.now();
+      if (!forceRefresh && userLevel && (now - lastFetchTime < CACHE_DURATION)) {
+        console.log('Usando datos en caché para el nivel de usuario');
+        return;
+      }
+
+      // Verificar si hemos excedido el número máximo de intentos
+      if (fetchAttempts >= MAX_FETCH_ATTEMPTS) {
+        console.log('Máximo número de intentos alcanzado, esperando antes de reintentar');
+        // Reiniciar contador después de un tiempo
+        setTimeout(() => {
+          setFetchAttempts(0);
+        }, 5000);
+        return;
+      }
+
       setLoading(true);
+      setLastFetchTime(now);
+      setFetchAttempts(prev => prev + 1);
 
       // Verificar autenticación antes de continuar
       const isAuthenticated = await checkAuthentication();
 
       if (!isAuthenticated) {
-        // Si no está autenticado, intentar refrescar la sesión
-        await refreshSession();
-
-        // Verificar nuevamente después de refrescar
-        const isAuthenticatedAfterRefresh = await checkAuthentication();
-
-        if (!isAuthenticatedAfterRefresh) {
-          throw new Error('Usuario no autenticado');
-        }
+        // Si no está autenticado, no intentar refrescar la sesión automáticamente
+        // para evitar bucles infinitos
+        console.log('Usuario no autenticado, no se intentará refrescar la sesión automáticamente');
+        throw new Error('Usuario no autenticado');
       }
 
       // Obtener el nivel del usuario
-      const { userLevel, error } = await getUserLevel();
+      const { userLevel: newUserLevel, error } = await getUserLevel();
 
       if (error) {
         // Registrar el error técnico en la consola
@@ -96,7 +121,9 @@ export const LevelProvider: React.FC<LevelProviderProps> = ({ children }) => {
         throw new Error('No se pudo cargar tu información de nivel');
       }
 
-      setUserLevel(userLevel);
+      // Reiniciar contador de intentos al tener éxito
+      setFetchAttempts(0);
+      setUserLevel(newUserLevel);
 
       // Actualizar el ranking del usuario
       try {
@@ -134,11 +161,14 @@ export const LevelProvider: React.FC<LevelProviderProps> = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, [user, refreshSession]);
+  }, [user, refreshSession, userLevel, lastFetchTime, fetchAttempts]);
 
   // Efecto para cargar el nivel cuando cambia el usuario
   useEffect(() => {
-    fetchUserLevel();
+    // Solo cargar si hay un usuario autenticado
+    if (user) {
+      fetchUserLevel();
+    }
   }, [user, fetchUserLevel]);
 
   const checkLevelUp = async (): Promise<boolean> => {
@@ -147,38 +177,42 @@ export const LevelProvider: React.FC<LevelProviderProps> = ({ children }) => {
       const isAuthenticated = await checkAuthentication();
 
       if (!isAuthenticated) {
-        // Si no está autenticado, intentar refrescar la sesión
-        await refreshSession();
-
-        // Verificar nuevamente después de refrescar
-        const isAuthenticatedAfterRefresh = await checkAuthentication();
-
-        if (!isAuthenticatedAfterRefresh) {
-          throw new Error('Usuario no autenticado');
-        }
+        console.log('Usuario no autenticado al verificar subida de nivel');
+        return false;
       }
 
       // Actualizar el nivel del usuario
       const { leveledUp, newLevel, error } = await updateUserLevel();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error al actualizar nivel:', error);
+        return false;
+      }
 
       // Si el usuario subió de nivel, mostrar notificación
       if (leveledUp && newLevel) {
-        // Obtener la recompensa del nuevo nivel
-        const { reward } = await getLevelReward(newLevel);
+        try {
+          // Obtener la recompensa del nuevo nivel
+          const { reward } = await getLevelReward(newLevel);
 
-        // Mostrar alerta de subida de nivel
-        Alert.alert(
-          '¡Subiste de Nivel!',
-          `Has alcanzado el nivel ${newLevel}${reward ? `\n\nRecompensa: ${reward}` : ''}`,
-          [{ text: 'Genial!' }]
-        );
+          // Mostrar alerta de subida de nivel
+          Alert.alert(
+            '¡Subiste de Nivel!',
+            `Has alcanzado el nivel ${newLevel}${reward ? `\n\nRecompensa: ${reward}` : ''}`,
+            [{ text: 'Genial!' }]
+          );
 
-        // Actualizar el nivel del usuario en el estado
-        await fetchUserLevel();
+          // Actualizar el nivel del usuario en el estado (forzar actualización)
+          // Usar setTimeout para evitar posibles bucles
+          setTimeout(() => {
+            fetchUserLevel(true);
+          }, 500);
 
-        return true;
+          return true;
+        } catch (rewardError) {
+          console.error('Error al obtener recompensa de nivel:', rewardError);
+          return true; // Aún así retornamos true porque el nivel subió
+        }
       }
 
       return false;
@@ -188,6 +222,54 @@ export const LevelProvider: React.FC<LevelProviderProps> = ({ children }) => {
     }
   };
 
+  // Función para mostrar un toast con la XP ganada
+  const showXPToast = useCallback((amount: number, action: string) => {
+    const message = `+${amount} XP: ${action}`;
+
+    if (Platform.OS === 'android') {
+      ToastAndroid.showWithGravity(
+        message,
+        ToastAndroid.SHORT,
+        ToastAndroid.BOTTOM
+      );
+    } else {
+      // En iOS podríamos usar una librería como react-native-toast-message
+      console.log(message);
+      // Aquí podrías implementar una alerta visual para iOS
+    }
+  }, []);
+
+  // Función para añadir XP y mostrar feedback visual
+  const addXP = useCallback(async (amount: number, action: string): Promise<boolean> => {
+    try {
+      const result = await addExperiencePoints(amount, action);
+
+      if (result.success) {
+        // Mostrar feedback visual
+        showXPToast(result.xpAwarded, action);
+
+        // Actualizar el nivel del usuario después de un breve retraso
+        setTimeout(() => {
+          fetchUserLevel(true);
+        }, 1000);
+
+        return true;
+      } else {
+        if (result.cooldown) {
+          console.log('Acción en cooldown, no se otorgó XP');
+        } else if (result.limitReached) {
+          console.log('Límite alcanzado, no se otorgó XP');
+        } else {
+          console.error('Error al añadir XP:', result.error);
+        }
+        return false;
+      }
+    } catch (error) {
+      console.error('Error en addXP:', error);
+      return false;
+    }
+  }, [fetchUserLevel, showXPToast]);
+
   return (
     <LevelContext.Provider
       value={{
@@ -196,8 +278,10 @@ export const LevelProvider: React.FC<LevelProviderProps> = ({ children }) => {
         loading,
         error,
         rankingPosition,
-        refreshLevel: fetchUserLevel,
+        refreshLevel: () => fetchUserLevel(true), // Forzar actualización cuando se llama explícitamente
         checkLevelUp,
+        addXP,
+        showXPToast,
       }}
     >
       {children}

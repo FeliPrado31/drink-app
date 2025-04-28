@@ -17,7 +17,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: false, // Disable auto-detection of OAuth grants in URL for mobile
     autoRefreshToken: true,
-    debug: true, // Enable debug logs for troubleshooting
+    debug: false, // Enable debug logs for troubleshooting
     flowType: 'implicit', // Use implicit flow for better mobile performance
     // Set a longer storage key refresh time to reduce frequent checks
     storageKey: 'supabase-auth-token',
