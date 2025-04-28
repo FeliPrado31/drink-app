@@ -10,6 +10,10 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { LogBox } from 'react-native';
 import { supabase } from './src/services/supabase';
 import ErrorBoundary from './src/components/ErrorBoundary';
+import { logger } from './src/utils/logger';
+import { cacheManager } from './src/utils/cacheManager';
+import { xpQueue } from './src/utils/xpQueue';
+import { syncManager } from './src/utils/syncManager';
 
 // Ignorar advertencias específicas
 LogBox.ignoreLogs([
@@ -43,13 +47,43 @@ const Stack = createNativeStackNavigator();
 export default function App() {
   const [key, setKey] = useState(0);
 
+  // Configurar el nivel de log según el entorno
+  useEffect(() => {
+    if (__DEV__) {
+      logger.setLogLevel(0); // DEBUG en desarrollo
+    } else {
+      logger.setLogLevel(2); // WARNING en producción
+    }
+
+    logger.info('Aplicación iniciada');
+
+    // Registrar tareas de sincronización periódica
+    syncManager.registerTask(
+      'flush-xp-queue',
+      'Procesar cola de XP',
+      async () => {
+        logger.debug('Ejecutando tarea programada: Procesar cola de XP');
+        await xpQueue.flush();
+      },
+      30000 // Cada 30 segundos
+    );
+
+    // Limpiar al desmontar
+    return () => {
+      syncManager.unregisterTask('flush-xp-queue');
+      xpQueue.stopAutoFlush();
+      logger.info('Aplicación detenida');
+    };
+  }, []);
+
   // Función para reiniciar la aplicación en caso de error
   const handleReset = () => {
     setKey(prevKey => prevKey + 1);
-  };
 
-  // Ya no necesitamos suscribirnos a cambios de autenticación aquí
-  // porque lo manejamos en el AuthProvider
+    // Limpiar caché al reiniciar
+    cacheManager.invalidateAll();
+    logger.info('Aplicación reiniciada');
+  };
 
   // Normal app rendering
   return (

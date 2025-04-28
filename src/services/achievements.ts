@@ -1,4 +1,18 @@
 import { supabase } from './supabase';
+import { cacheManager } from '../utils/cacheManager';
+import { logger } from '../utils/logger';
+
+// Flags para controlar la inicialización
+let achievementsInitialized = false;
+let predefinedAchievementsLoaded = false;
+
+// Claves de caché
+const CACHE_KEYS = {
+  ALL_ACHIEVEMENTS: 'all_achievements',
+  USER_ACHIEVEMENTS: 'user_achievements',
+  PLAYER_STATS: 'player_stats',
+  PREDEFINED_ACHIEVEMENTS: 'predefined_achievements'
+};
 
 // Función para obtener los logros predeterminados
 export const getDefaultAchievements = () => {
@@ -154,17 +168,39 @@ export type PlayerStats = {
 
 // Función para obtener todos los logros
 export const getAchievements = async (includeSecret: boolean = false) => {
-  let query = supabase
-    .from('achievements')
-    .select('*')
-    .order('id');
+  // Clave de caché específica para esta consulta
+  const cacheKey = `${CACHE_KEYS.ALL_ACHIEVEMENTS}_${includeSecret}`;
 
-  if (!includeSecret) {
-    query = query.eq('is_secret', false);
+  // Intentar obtener de la caché primero
+  const cachedData = cacheManager.get<{ achievements: Achievement[], error: any }>(cacheKey);
+  if (cachedData) {
+    logger.debug(`Usando logros en caché (includeSecret=${includeSecret})`);
+    return cachedData;
   }
 
-  const { data, error } = await query;
-  return { achievements: data as Achievement[], error };
+  logger.debug(`Obteniendo logros de la base de datos (includeSecret=${includeSecret})`);
+
+  return logger.measureAsync(`getAchievements(${includeSecret})`, async () => {
+    let query = supabase
+      .from('achievements')
+      .select('*')
+      .order('id');
+
+    if (!includeSecret) {
+      query = query.eq('is_secret', false);
+    }
+
+    const { data, error } = await query;
+
+    if (!error && data) {
+      // Guardar en caché por 5 minutos (los logros cambian con poca frecuencia)
+      const result = { achievements: data as Achievement[], error };
+      cacheManager.set(cacheKey, result, 5 * 60 * 1000);
+      return result;
+    }
+
+    return { achievements: data as Achievement[], error };
+  });
 };
 
 // Función para obtener los logros del usuario actual
@@ -361,152 +397,197 @@ export const getPlayerStats = async () => {
 
 // Función para inicializar los logros de un usuario
 export const initializeUserAchievements = async () => {
-  console.log('Inicializando logros para el usuario...');
+  // Si ya se inicializaron los logros en esta sesión, no hacerlo de nuevo
+  if (achievementsInitialized) {
+    logger.debug('Logros ya inicializados en esta sesión, omitiendo...');
+    return { error: null };
+  }
+
+  logger.info('Inicializando logros para el usuario...');
 
   try {
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      console.error('Error: Usuario no autenticado en initializeUserAchievements');
+      logger.error('Error: Usuario no autenticado en initializeUserAchievements');
       return { error: null }; // Devolver error nulo para evitar errores en cascada
     }
 
-    console.log('Usuario autenticado para inicialización:', user.id);
+    logger.info('Usuario autenticado para inicialización:', user.id);
 
     // Verificar si todos los logros predefinidos existen en la base de datos
     await ensureAllAchievementsExist();
 
-    // Obtener todos los logros (incluyendo secretos)
-    const { achievements, error: achievementsError } = await getAchievements(true);
+    return logger.measureAsync('initializeUserAchievements', async () => {
+      // Obtener todos los logros (incluyendo secretos)
+      const { achievements, error: achievementsError } = await getAchievements(true);
 
-    if (achievementsError) {
-      console.error('Error al obtener logros:', achievementsError);
-      return { error: null }; // Devolver error nulo para evitar errores en cascada
-    }
+      if (achievementsError) {
+        logger.error('Error al obtener logros:', achievementsError);
+        return { error: null }; // Devolver error nulo para evitar errores en cascada
+      }
 
-    console.log(`Se encontraron ${achievements.length} logros para inicializar`);
+      logger.info(`Se encontraron ${achievements.length} logros para inicializar`);
 
-    // Verificar si el usuario ya tiene logros inicializados
-    const { data: existingAchievements, error: checkError } = await supabase
-      .from('user_achievements')
-      .select('achievement_id')
-      .eq('user_id', user.id);
+      // Verificar si el usuario ya tiene logros inicializados
+      const { data: existingAchievements, error: checkError } = await supabase
+        .from('user_achievements')
+        .select('achievement_id')
+        .eq('user_id', user.id);
 
-    if (checkError) {
-      console.error('Error al verificar logros existentes:', checkError);
-      return { error: null }; // Devolver error nulo para evitar errores en cascada
-    }
+      if (checkError) {
+        logger.error('Error al verificar logros existentes:', checkError);
+        return { error: null }; // Devolver error nulo para evitar errores en cascada
+      }
 
-    // Crear un conjunto de IDs de logros que el usuario ya tiene
-    const existingAchievementIds = new Set(
-      (existingAchievements || []).map(item => item.achievement_id)
-    );
+      // Crear un conjunto de IDs de logros que el usuario ya tiene
+      const existingAchievementIds = new Set(
+        (existingAchievements || []).map(item => item.achievement_id)
+      );
 
-    console.log(`El usuario ya tiene ${existingAchievementIds.size} logros inicializados`);
+      logger.info(`El usuario ya tiene ${existingAchievementIds.size} logros inicializados`);
 
-    // Filtrar solo los logros que el usuario no tiene aún
-    const achievementsToAdd = achievements.filter(
-      achievement => !existingAchievementIds.has(achievement.id)
-    );
+      // Filtrar solo los logros que el usuario no tiene aún
+      const achievementsToAdd = achievements.filter(
+        achievement => !existingAchievementIds.has(achievement.id)
+      );
 
-    console.log(`Se necesitan inicializar ${achievementsToAdd.length} logros nuevos`);
+      logger.info(`Se necesitan inicializar ${achievementsToAdd.length} logros nuevos`);
 
-    if (achievementsToAdd.length === 0) {
-      console.log('No hay nuevos logros para inicializar');
-      return { error: null }; // Usuario ya tiene todos los logros inicializados
-    }
+      if (achievementsToAdd.length === 0) {
+        logger.info('No hay nuevos logros para inicializar');
+        // Marcar como inicializado
+        achievementsInitialized = true;
+        return { error: null }; // Usuario ya tiene todos los logros inicializados
+      }
 
-    // Preparar los datos para insertar
-    const userAchievementsData = achievementsToAdd.map(achievement => ({
-      user_id: user.id,
-      achievement_id: achievement.id,
-      progress: 0,
-      unlocked: false,
-      reward_claimed: false
-    }));
+      // Preparar los datos para insertar
+      const userAchievementsData = achievementsToAdd.map(achievement => ({
+        user_id: user.id,
+        achievement_id: achievement.id,
+        progress: 0,
+        unlocked: false,
+        reward_claimed: false
+      }));
 
-    // Insertar los registros de logros del usuario
-    const { error: insertError } = await supabase
-      .from('user_achievements')
-      .insert(userAchievementsData);
+      // Insertar los registros de logros del usuario
+      const { error: insertError } = await supabase
+        .from('user_achievements')
+        .insert(userAchievementsData);
 
-    if (insertError) {
-      console.error('Error al insertar logros:', insertError);
-    } else {
-      console.log(`${achievementsToAdd.length} logros inicializados correctamente`);
-    }
+      if (insertError) {
+        logger.error('Error al insertar logros:', insertError);
+      } else {
+        logger.info(`${achievementsToAdd.length} logros inicializados correctamente`);
+      }
 
-    return { error: null }; // Siempre devolver error nulo para evitar errores en cascada
+      // Marcar como inicializado incluso si hubo un error
+      // para evitar intentos repetidos que probablemente fallarían
+      achievementsInitialized = true;
+
+      // Invalidar la caché de logros del usuario
+      cacheManager.invalidate(CACHE_KEYS.USER_ACHIEVEMENTS);
+
+      return { error: null }; // Siempre devolver error nulo para evitar errores en cascada
+    });
   } catch (err) {
-    console.error('Error inesperado en initializeUserAchievements:', err);
+    logger.error('Error inesperado en initializeUserAchievements:', err);
     return { error: null }; // Devolver error nulo para evitar errores en cascada
   }
 };
 
 // Función para asegurar que todos los logros predefinidos existan en la base de datos
 export const ensureAllAchievementsExist = async () => {
+  // Si ya se verificaron los logros predefinidos, no hacerlo de nuevo
+  if (predefinedAchievementsLoaded) {
+    logger.debug('Logros predefinidos ya verificados, omitiendo...');
+    return;
+  }
+
   try {
-    console.log('Verificando que todos los logros predefinidos existan en la base de datos...');
+    logger.info('Verificando que todos los logros predefinidos existan en la base de datos...');
 
-    // Obtener todos los logros predefinidos
-    const defaultAchievements = getDefaultAchievements();
-
-    // Obtener todos los logros existentes en la base de datos
-    const { data: existingAchievements, error } = await supabase
-      .from('achievements')
-      .select('code');
-
-    if (error) {
-      console.error('Error al obtener logros existentes:', error);
+    // Intentar obtener de la caché primero
+    const cachedPredefined = cacheManager.get<boolean>(CACHE_KEYS.PREDEFINED_ACHIEVEMENTS);
+    if (cachedPredefined) {
+      logger.debug('Usando verificación de logros predefinidos en caché');
+      predefinedAchievementsLoaded = true;
       return;
     }
 
-    // Crear un conjunto de códigos de logros que ya existen
-    const existingCodes = new Set(
-      (existingAchievements || []).map(item => item.code)
-    );
+    return logger.measureAsync('ensureAllAchievementsExist', async () => {
+      // Obtener todos los logros predefinidos
+      const defaultAchievements = getDefaultAchievements();
 
-    // Filtrar solo los logros que no existen en la base de datos
-    const achievementsToAdd = defaultAchievements.filter(
-      achievement => !existingCodes.has(achievement.code)
-    );
+      // Obtener todos los logros existentes en la base de datos
+      const { data: existingAchievements, error } = await supabase
+        .from('achievements')
+        .select('code');
 
-    console.log(`Se necesitan crear ${achievementsToAdd.length} logros nuevos`);
-
-    if (achievementsToAdd.length === 0) {
-      console.log('Todos los logros predefinidos ya existen en la base de datos');
-      return;
-    }
-
-    // Crear los logros faltantes uno por uno para evitar errores
-    for (const achievement of achievementsToAdd) {
-      try {
-        console.log(`Creando logro: ${achievement.code} - ${achievement.name}`);
-
-        const { error: createError } = await supabase
-          .from('achievements')
-          .insert({
-            code: achievement.code,
-            name: achievement.name,
-            description: achievement.description,
-            icon: achievement.icon,
-            required_count: achievement.required_count,
-            is_secret: achievement.is_secret,
-            reward_description: achievement.reward_description,
-            created_at: new Date().toISOString()
-          });
-
-        if (createError) {
-          console.error(`Error al crear logro ${achievement.code}:`, createError);
-        } else {
-          console.log(`Logro ${achievement.code} creado correctamente`);
-        }
-      } catch (err) {
-        console.error(`Error inesperado al crear logro ${achievement.code}:`, err);
+      if (error) {
+        logger.error('Error al obtener logros existentes:', error);
+        return;
       }
-    }
+
+      // Crear un conjunto de códigos de logros que ya existen
+      const existingCodes = new Set(
+        (existingAchievements || []).map(item => item.code)
+      );
+
+      // Filtrar solo los logros que no existen en la base de datos
+      const achievementsToAdd = defaultAchievements.filter(
+        achievement => !existingCodes.has(achievement.code)
+      );
+
+      logger.info(`Se necesitan crear ${achievementsToAdd.length} logros nuevos`);
+
+      if (achievementsToAdd.length === 0) {
+        logger.info('Todos los logros predefinidos ya existen en la base de datos');
+
+        // Marcar como verificado y guardar en caché
+        predefinedAchievementsLoaded = true;
+        cacheManager.set(CACHE_KEYS.PREDEFINED_ACHIEVEMENTS, true, 24 * 60 * 60 * 1000); // 24 horas
+
+        return;
+      }
+
+      // Crear los logros faltantes uno por uno para evitar errores
+      for (const achievement of achievementsToAdd) {
+        try {
+          logger.info(`Creando logro: ${achievement.code} - ${achievement.name}`);
+
+          const { error: createError } = await supabase
+            .from('achievements')
+            .insert({
+              code: achievement.code,
+              name: achievement.name,
+              description: achievement.description,
+              icon: achievement.icon,
+              required_count: achievement.required_count,
+              is_secret: achievement.is_secret,
+              reward_description: achievement.reward_description,
+              created_at: new Date().toISOString()
+            });
+
+          if (createError) {
+            logger.error(`Error al crear logro ${achievement.code}:`, createError);
+          } else {
+            logger.info(`Logro ${achievement.code} creado correctamente`);
+          }
+        } catch (createErr) {
+          logger.error(`Error inesperado al crear logro ${achievement.code}:`, createErr);
+        }
+      }
+
+      // Invalidar la caché de logros
+      cacheManager.invalidate(CACHE_KEYS.ALL_ACHIEVEMENTS);
+
+      // Marcar como verificado y guardar en caché
+      predefinedAchievementsLoaded = true;
+      cacheManager.set(CACHE_KEYS.PREDEFINED_ACHIEVEMENTS, true, 24 * 60 * 60 * 1000); // 24 horas
+    });
   } catch (err) {
-    console.error('Error inesperado en ensureAllAchievementsExist:', err);
+    logger.error('Error inesperado en ensureAllAchievementsExist:', err);
   }
 };
 

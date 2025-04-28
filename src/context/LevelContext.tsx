@@ -15,6 +15,10 @@ import {
 import { Alert, ToastAndroid, Platform } from 'react-native';
 import { useAuth } from './AuthContext';
 import { supabase } from '../services/supabase';
+import { logger } from '../utils/logger';
+import { cacheManager } from '../utils/cacheManager';
+import { xpQueue } from '../utils/xpQueue';
+import { syncManager } from '../utils/syncManager';
 
 type LevelContextType = {
   userLevel: UserLevel | null;
@@ -82,13 +86,13 @@ export const LevelProvider: React.FC<LevelProviderProps> = ({ children }) => {
       // Verificar si debemos usar la caché
       const now = Date.now();
       if (!forceRefresh && userLevel && (now - lastFetchTime < CACHE_DURATION)) {
-        console.log('Usando datos en caché para el nivel de usuario');
+        logger.debug('Usando datos en caché para el nivel de usuario');
         return;
       }
 
       // Verificar si hemos excedido el número máximo de intentos
       if (fetchAttempts >= MAX_FETCH_ATTEMPTS) {
-        console.log('Máximo número de intentos alcanzado, esperando antes de reintentar');
+        logger.warning('Máximo número de intentos alcanzado, esperando antes de reintentar');
         // Reiniciar contador después de un tiempo
         setTimeout(() => {
           setFetchAttempts(0);
@@ -106,16 +110,20 @@ export const LevelProvider: React.FC<LevelProviderProps> = ({ children }) => {
       if (!isAuthenticated) {
         // Si no está autenticado, no intentar refrescar la sesión automáticamente
         // para evitar bucles infinitos
-        console.log('Usuario no autenticado, no se intentará refrescar la sesión automáticamente');
+        logger.warning('Usuario no autenticado, no se intentará refrescar la sesión automáticamente');
         throw new Error('Usuario no autenticado');
       }
 
       // Obtener el nivel del usuario
-      const { userLevel: newUserLevel, error } = await getUserLevel();
+      const result = await logger.measureAsync('getUserLevel', async () => {
+        return await getUserLevel();
+      });
+
+      const { userLevel: newUserLevel, error } = result;
 
       if (error) {
         // Registrar el error técnico en la consola
-        console.error('Error técnico al obtener nivel de usuario:', error);
+        logger.error('Error técnico al obtener nivel de usuario:', error);
 
         // Lanzar un error genérico para el usuario
         throw new Error('No se pudo cargar tu información de nivel');
@@ -127,28 +135,32 @@ export const LevelProvider: React.FC<LevelProviderProps> = ({ children }) => {
 
       // Actualizar el ranking del usuario
       try {
-        await updateUserRanking();
+        await logger.measureAsync('updateUserRanking', async () => {
+          await updateUserRanking();
+        });
       } catch (rankUpdateErr) {
         // Solo registrar en consola, no interrumpir el flujo
-        console.error('Error al actualizar ranking:', rankUpdateErr);
+        logger.error('Error al actualizar ranking:', rankUpdateErr);
       }
 
       // Obtener la posición en el ranking
       try {
-        const { position, error: rankError } = await getUserRankingPosition();
+        const { position, error: rankError } = await logger.measureAsync('getUserRankingPosition', async () => {
+          return await getUserRankingPosition();
+        });
 
         if (!rankError && position) {
           setRankingPosition(position);
         }
       } catch (rankPosErr) {
         // Solo registrar en consola, no interrumpir el flujo
-        console.error('Error al obtener posición en ranking:', rankPosErr);
+        logger.error('Error al obtener posición en ranking:', rankPosErr);
       }
 
       setError(null);
     } catch (err: any) {
       // Registrar el error técnico completo en la consola
-      console.error('Error técnico en fetchUserLevel:', err);
+      logger.error('Error técnico en fetchUserLevel:', err);
 
       // Determinar un mensaje de error amigable para el usuario
       let userFriendlyMessage = 'No se pudo cargar tu información de nivel';
@@ -234,7 +246,7 @@ export const LevelProvider: React.FC<LevelProviderProps> = ({ children }) => {
       );
     } else {
       // En iOS podríamos usar una librería como react-native-toast-message
-      console.log(message);
+      logger.info(message);
       // Aquí podrías implementar una alerta visual para iOS
     }
   }, []);
@@ -242,11 +254,19 @@ export const LevelProvider: React.FC<LevelProviderProps> = ({ children }) => {
   // Función para añadir XP y mostrar feedback visual
   const addXP = useCallback(async (amount: number, action: string): Promise<boolean> => {
     try {
-      const result = await addExperiencePoints(amount, action);
+      logger.info(`Añadiendo ${amount} XP por acción: ${action}`);
+
+      const result = await logger.measureAsync(`addExperiencePoints(${amount}, ${action})`, async () => {
+        return await addExperiencePoints(amount, action);
+      });
 
       if (result.success) {
         // Mostrar feedback visual
-        showXPToast(result.xpAwarded, action);
+        if (result.xpAwarded !== undefined) {
+          showXPToast(result.xpAwarded, action);
+        } else {
+          showXPToast(amount, action); // Usar la cantidad original si no hay xpAwarded
+        }
 
         // Actualizar el nivel del usuario después de un breve retraso
         setTimeout(() => {
@@ -255,17 +275,20 @@ export const LevelProvider: React.FC<LevelProviderProps> = ({ children }) => {
 
         return true;
       } else {
-        if (result.cooldown) {
-          console.log('Acción en cooldown, no se otorgó XP');
-        } else if (result.limitReached) {
-          console.log('Límite alcanzado, no se otorgó XP');
+        // Manejar diferentes tipos de errores
+        const errorObj = result as any; // Type assertion para acceder a propiedades opcionales
+
+        if (errorObj.cooldown) {
+          logger.info('Acción en cooldown, no se otorgó XP');
+        } else if (errorObj.limitReached) {
+          logger.info('Límite alcanzado, no se otorgó XP');
         } else {
-          console.error('Error al añadir XP:', result.error);
+          logger.error('Error al añadir XP:', result.error);
         }
         return false;
       }
     } catch (error) {
-      console.error('Error en addXP:', error);
+      logger.error('Error en addXP:', error);
       return false;
     }
   }, [fetchUserLevel, showXPToast]);
