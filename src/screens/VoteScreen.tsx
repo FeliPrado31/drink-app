@@ -10,7 +10,7 @@ import {
   RefreshControl
 } from 'react-native';
 import { Button } from 'react-native-elements';
-import { getSuggestions, voteSuggestion, Suggestion, getSettings } from '../services/supabase';
+import { getSuggestions, voteSuggestion, Suggestion, getSettings, supabase, updateAllVoteCounts } from '../services/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { useAchievements } from '../context/AchievementsContext';
 
@@ -28,12 +28,22 @@ const VoteScreen: React.FC<VoteScreenProps> = ({ navigation }) => {
   // Acceder al contexto de logros
   const { trackAchievements, updateStats } = useAchievements();
 
-  const fetchData = async () => {
+  const fetchData = async (showLoading = true) => {
     try {
-      // Fetch suggestions
-      const { suggestions, error } = await getSuggestions('pending');
+      console.log('Actualizando lista de sugerencias...');
+
+      if (showLoading) {
+        setLoading(true);
+      }
+
+      // Fetch suggestions - Forzar una consulta fresca a la base de datos
+      // La función getSuggestions ya se encarga de actualizar los contadores
+      const { suggestions, error } = await getSuggestions('pending', true);
       if (error) throw error;
 
+      console.log(`Obtenidas ${suggestions?.length || 0} sugerencias pendientes`);
+
+      // Actualizar el estado con las sugerencias obtenidas
       setSuggestions(suggestions || []);
 
       // Fetch min votes setting
@@ -41,12 +51,18 @@ const VoteScreen: React.FC<VoteScreenProps> = ({ navigation }) => {
       if (settingsError) throw settingsError;
 
       if (value) {
+        console.log(`Configuración de votos mínimos: ${value}`);
         setMinVotes(parseInt(value, 10));
       }
+
+      console.log('Actualización completada');
     } catch (err: any) {
+      console.error('Error al cargar sugerencias:', err);
       Alert.alert('Error', err.message || 'Error al cargar sugerencias');
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
       setRefreshing(false);
     }
   };
@@ -55,37 +71,33 @@ const VoteScreen: React.FC<VoteScreenProps> = ({ navigation }) => {
     fetchData();
   }, []);
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    fetchData();
+
+    try {
+      // Actualizar manualmente los contadores de votos mediante RPC
+      const { success, error } = await updateAllVoteCounts();
+
+      if (error) {
+        console.error('Error al actualizar contadores mediante RPC:', error);
+      } else {
+        console.log('Contadores actualizados correctamente mediante RPC');
+      }
+
+      // Obtener las sugerencias actualizadas
+      await fetchData(false);
+      console.log('Actualización completada');
+    } catch (error) {
+      console.error('Error al actualizar sugerencias:', error);
+      setRefreshing(false);
+    }
   };
 
   const handleVote = async (suggestionId: number) => {
     try {
-      const { error } = await voteSuggestion(suggestionId);
+      console.log(`Intentando votar por sugerencia ID: ${suggestionId}`);
 
-      if (error) throw error;
-
-      // Incrementar contador de votos
-      setVoteCount(prev => prev + 1);
-
-      // Registrar logro de votante
-      trackAchievements([{ code: 'voter' }]);
-
-      // Actualizar estadísticas
-      updateStats({ votes_given: 1 });
-
-      // Verificar si la sugerencia alcanzó los votos necesarios para ser aprobada
-      const suggestion = suggestions.find(s => s.id === suggestionId);
-      if (suggestion && suggestion.votes_count + 1 >= minVotes) {
-        // Si la sugerencia será aprobada, registrar logro de influencer
-        trackAchievements([{ code: 'suggestion_approved' }]);
-
-        // Actualizar estadísticas de sugerencias aprobadas
-        updateStats({ suggestions_approved: 1 });
-      }
-
-      // Update the local state to reflect the vote
+      // Primero actualizamos la UI para dar feedback inmediato al usuario
       setSuggestions(prevSuggestions =>
         prevSuggestions.map(suggestion =>
           suggestion.id === suggestionId
@@ -98,8 +110,69 @@ const VoteScreen: React.FC<VoteScreenProps> = ({ navigation }) => {
         )
       );
 
+      // Luego enviamos el voto a la base de datos
+      const { error, success, suggestion: updatedSuggestion } = await voteSuggestion(suggestionId);
+
+      if (error) {
+        // Si hay error, revertimos el cambio en la UI
+        console.error('Error al votar:', error);
+
+        // Recargar los datos originales
+        await fetchData(false);
+
+        throw error;
+      }
+
+      // Si tenemos la sugerencia actualizada, actualizamos la UI con los datos exactos
+      if (updatedSuggestion) {
+        console.log('Actualizando UI con sugerencia actualizada:', updatedSuggestion);
+
+        // Actualizar la sugerencia específica con los datos actualizados
+        // El contador de votos ya debe estar correcto desde la función voteSuggestion
+        setSuggestions(prevSuggestions =>
+          prevSuggestions.map(suggestion =>
+            suggestion.id === suggestionId
+              ? {
+                  ...updatedSuggestion,
+                  user_has_voted: true
+                }
+              : suggestion
+          )
+        );
+      } else {
+        // Si no tenemos la sugerencia actualizada, forzar una actualización completa
+        console.log('No se recibió la sugerencia actualizada, actualizando toda la lista...');
+        await fetchData(false);
+      }
+
+      // Incrementar contador de votos
+      setVoteCount(prev => prev + 1);
+
+      // Registrar logro de votante
+      await trackAchievements([{ code: 'voter' }]);
+
+      // Actualizar estadísticas
+      await updateStats({ votes_given: 1 });
+
+      // Verificar si la sugerencia alcanzó los votos necesarios para ser aprobada
+      const currentVotesCount = updatedSuggestion?.votes_count || 0;
+      if (currentVotesCount >= minVotes) {
+        // Si la sugerencia será aprobada, registrar logro de influencer
+        await trackAchievements([{ code: 'suggestion_approved' }]);
+
+        // Actualizar estadísticas de sugerencias aprobadas
+        await updateStats({ suggestions_approved: 1 });
+      }
+
       Alert.alert('Éxito', 'Tu voto ha sido registrado correctamente');
+
+      // Actualizar la lista de sugerencias después de un breve retraso para asegurar
+      // que los contadores estén actualizados correctamente
+      setTimeout(() => {
+        fetchData(false);
+      }, 1000); // Aumentar el tiempo de espera para asegurar que la base de datos esté actualizada
     } catch (err: any) {
+      console.error('Error al votar:', err);
       Alert.alert('Error', err.message || 'Error al registrar el voto');
     }
   };

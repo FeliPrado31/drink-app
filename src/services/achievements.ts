@@ -16,6 +16,7 @@ const CACHE_KEYS = {
 
 // Función para obtener los logros predeterminados
 export const getDefaultAchievements = () => {
+  // Lista de logros predefinidos
   return [
     {
       code: 'first_game',
@@ -124,6 +125,33 @@ export const getDefaultAchievements = () => {
       required_count: 1,
       is_secret: false,
       reward_description: 'Desbloquea preguntas extremas adicionales'
+    },
+    {
+      code: 'voter',
+      name: 'Votante',
+      description: 'Vota 10 sugerencias',
+      icon: '👍',
+      required_count: 10,
+      is_secret: false,
+      reward_description: null
+    },
+    {
+      code: 'suggestion_creator',
+      name: 'Creador de Contenido',
+      description: 'Crea 5 sugerencias',
+      icon: '✏️',
+      required_count: 5,
+      is_secret: false,
+      reward_description: null
+    },
+    {
+      code: 'suggestion_approved',
+      name: 'Influencer',
+      description: 'Consigue que 3 de tus sugerencias sean aprobadas',
+      icon: '🌟',
+      required_count: 3,
+      is_secret: false,
+      reward_description: null
     }
   ];
 };
@@ -647,30 +675,23 @@ export const updateAchievementProgress = async (
 
     console.log(`Logro encontrado: ${achievementData.name} (ID: ${achievementData.id}), requerido: ${achievementData.required_count}`);
 
-    // Obtener el registro actual del logro del usuario
-    const { data: userAchievement, error: userAchievementError } = await supabase
+    // Obtener el registro actual del logro del usuario (sin usar .single() para evitar errores)
+    const { data: userAchievements, error: userAchievementError } = await supabase
       .from('user_achievements')
       .select('id, progress, unlocked')
       .eq('user_id', user.id)
-      .eq('achievement_id', achievementData.id)
-      .single();
+      .eq('achievement_id', achievementData.id);
+
+    // Verificar si se encontraron registros
+    const userAchievement = userAchievements && userAchievements.length > 0 ? userAchievements[0] : null;
 
     console.log('Buscando registro de logro para usuario:',
       userAchievement ? `Encontrado (progreso: ${userAchievement.progress})` : 'No encontrado');
 
-    // Si hay un error específico de "no se encontró registro", continuamos con la lógica
-    if (userAchievementError && userAchievementError.code !== 'PGRST116') {
+    // Si hay un error real, manejarlo
+    if (userAchievementError) {
       console.error('Error al obtener registro de logro del usuario:', userAchievementError);
       return { unlocked: false, error: userAchievementError };
-    }
-
-    if (userAchievementError) {
-      if (userAchievementError.code === 'PGRST116') {
-        console.log('No se encontró registro de logro para el usuario, inicializando...');
-      } else {
-        console.error('Error al obtener registro de logro:', userAchievementError);
-        return { error: userAchievementError };
-      }
     }
 
     // Si el usuario no tiene este logro inicializado, inicializarlo
@@ -685,18 +706,49 @@ export const updateAchievementProgress = async (
 
       console.log('Logros inicializados, obteniendo registro actualizado...');
 
-      // Intentar obtener el registro nuevamente
-      const { data: newUserAchievement, error: newError } = await supabase
+      // Intentar obtener el registro nuevamente, pero sin usar .single() para evitar errores
+      const { data: newUserAchievements, error: newError } = await supabase
         .from('user_achievements')
         .select('id, progress, unlocked')
         .eq('user_id', user.id)
-        .eq('achievement_id', achievementData.id)
-        .single();
+        .eq('achievement_id', achievementData.id);
 
       if (newError) {
-        console.error('Error al obtener registro actualizado:', newError);
+        console.error('Error al obtener registros actualizados:', newError);
         return { error: newError };
       }
+
+      // Verificar si se encontraron registros
+      if (!newUserAchievements || newUserAchievements.length === 0) {
+        console.error('No se encontraron registros de logros para el usuario después de inicializar');
+
+        // Intentar crear el registro manualmente
+        console.log('Intentando crear el registro manualmente...');
+        const { error: createError } = await supabase
+          .from('user_achievements')
+          .insert({
+            user_id: user.id,
+            achievement_id: achievementData.id,
+            progress: increment,
+            unlocked: increment >= achievementData.required_count,
+            unlocked_at: increment >= achievementData.required_count ? new Date().toISOString() : null,
+            reward_claimed: false
+          });
+
+        if (createError) {
+          console.error('Error al crear registro manualmente:', createError);
+          return { error: createError };
+        }
+
+        console.log('Registro creado manualmente con éxito');
+        return {
+          unlocked: increment >= achievementData.required_count,
+          error: null
+        };
+      }
+
+      // Usar el primer registro encontrado
+      const newUserAchievement = newUserAchievements[0];
 
       if (!newUserAchievement) {
         console.error('No se pudo encontrar el registro después de inicializar');
@@ -819,19 +871,28 @@ export const claimAchievementReward = async (achievementId: number) => {
     return { error: new Error('Usuario no autenticado') };
   }
 
-  // Verificar si el logro está desbloqueado
-  const { data: userAchievement, error: checkError } = await supabase
+  // Verificar si el logro está desbloqueado (sin usar .single() para evitar errores)
+  const { data: userAchievements, error: checkError } = await supabase
     .from('user_achievements')
     .select('*')
     .eq('user_id', user.id)
     .eq('achievement_id', achievementId)
     .eq('unlocked', true)
-    .eq('reward_claimed', false)
-    .single();
+    .eq('reward_claimed', false);
 
   if (checkError) {
+    console.error('Error al verificar si el logro está desbloqueado:', checkError);
+    return { error: new Error('Error al verificar si el logro está desbloqueado') };
+  }
+
+  // Verificar si se encontraron registros
+  if (!userAchievements || userAchievements.length === 0) {
+    console.error('No se encontró el logro desbloqueado o ya fue reclamado');
     return { error: new Error('No se puede reclamar esta recompensa') };
   }
+
+  // Usar el primer registro encontrado
+  const userAchievement = userAchievements[0];
 
   // Marcar la recompensa como reclamada
   const { error: updateError } = await supabase
@@ -850,27 +911,42 @@ export const shareAchievement = async (achievementId: number) => {
     return { error: new Error('Usuario no autenticado'), shareUrl: null };
   }
 
-  // Obtener detalles del logro
-  const { data: achievement, error: achievementError } = await supabase
+  // Obtener detalles del logro (sin usar .single() para evitar errores)
+  const { data: achievements, error: achievementError } = await supabase
     .from('achievements')
     .select('*')
-    .eq('id', achievementId)
-    .single();
+    .eq('id', achievementId);
 
   if (achievementError) {
+    console.error('Error al obtener detalles del logro:', achievementError);
     return { error: achievementError, shareUrl: null };
   }
 
-  // Verificar si el usuario ha desbloqueado este logro
-  const { data: userAchievement, error: userAchievementError } = await supabase
+  // Verificar si se encontró el logro
+  if (!achievements || achievements.length === 0) {
+    console.error('No se encontró el logro con ID:', achievementId);
+    return { error: new Error('Logro no encontrado'), shareUrl: null };
+  }
+
+  // Usar el primer logro encontrado
+  const achievement = achievements[0];
+
+  // Verificar si el usuario ha desbloqueado este logro (sin usar .single() para evitar errores)
+  const { data: userAchievements, error: userAchievementError } = await supabase
     .from('user_achievements')
     .select('*')
     .eq('user_id', user.id)
     .eq('achievement_id', achievementId)
-    .eq('unlocked', true)
-    .single();
+    .eq('unlocked', true);
 
   if (userAchievementError) {
+    console.error('Error al verificar si el usuario ha desbloqueado el logro:', userAchievementError);
+    return { error: userAchievementError, shareUrl: null };
+  }
+
+  // Verificar si el usuario ha desbloqueado el logro
+  if (!userAchievements || userAchievements.length === 0) {
+    console.error('El usuario no ha desbloqueado el logro con ID:', achievementId);
     return { error: new Error('No puedes compartir un logro que no has desbloqueado'), shareUrl: null };
   }
 

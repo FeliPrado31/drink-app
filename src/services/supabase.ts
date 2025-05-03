@@ -415,133 +415,295 @@ export const createSuggestion = async (content: string, type: 'truth' | 'dare', 
   return { suggestion: data as Suggestion, error };
 };
 
-export const getSuggestions = async (status: 'pending' | 'approved' | 'rejected' = 'pending') => {
-  const { data: { user } } = await supabase.auth.getUser();
+export const getSuggestions = async (status: 'pending' | 'approved' | 'rejected' = 'pending', forceRefresh: boolean = true) => {
+  try {
+    console.log(`Obteniendo sugerencias con estado: ${status}`);
 
-  if (!user) {
-    return { suggestions: [], error: new Error('Usuario no autenticado') };
+    // Verificar que el usuario esté autenticado
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      console.error('Error: Usuario no autenticado al obtener sugerencias');
+      return { suggestions: [], error: new Error('Usuario no autenticado') };
+    }
+
+    // Obtener todas las sugerencias con el estado especificado
+    // Primero, actualizar el conteo real de votos para cada sugerencia
+    if (forceRefresh) {
+      // Utilizar el endpoint RPC para actualizar todos los contadores de votos
+      console.log('Actualizando contadores de votos en la base de datos...');
+      try {
+        const { success, error } = await updateAllVoteCounts();
+
+        if (error) {
+          console.error('Error al actualizar contadores de votos mediante RPC:', error);
+          // Continuar con la consulta normal aunque falle la actualización
+        } else if (success) {
+          console.log('Contadores actualizados correctamente mediante RPC');
+        }
+      } catch (e) {
+        console.error('Error al actualizar contadores de votos:', e);
+        // Continuar con la consulta normal aunque falle la actualización
+      }
+    }
+
+    // Ahora obtener las sugerencias con los contadores actualizados
+    let query = supabase
+      .from('suggestions')
+      .select('*, game_modes(name)')
+      .eq('status', status);
+
+    // Ordenar por fecha de creación (más recientes primero)
+    query = query.order('created_at', { ascending: false });
+
+    // Añadir un parámetro aleatorio para evitar caché
+    const timestamp = new Date().getTime();
+    console.log(`Forzando consulta fresca con timestamp: ${timestamp}`);
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error al obtener sugerencias:', error);
+      return { suggestions: [], error: error };
+    }
+
+    if (!data || data.length === 0) {
+      console.log(`No se encontraron sugerencias con estado: ${status}`);
+      return { suggestions: [], error: null };
+    }
+
+    console.log(`Se encontraron ${data.length} sugerencias con estado: ${status}`);
+
+    // Verificar por cuáles sugerencias ha votado el usuario actual
+    const { data: votes, error: votesError } = await supabase
+      .from('votes')
+      .select('suggestion_id')
+      .eq('user_id', user.id);
+
+    if (votesError) {
+      console.error('Error al obtener votos del usuario:', votesError);
+      return { suggestions: [], error: votesError };
+    }
+
+    // Crear un conjunto de IDs de sugerencias por las que el usuario ha votado
+    const votedSuggestionIds = new Set((votes || []).map(vote => vote.suggestion_id));
+    console.log(`El usuario ha votado por ${votedSuggestionIds.size} sugerencias`);
+
+    // Añadir la bandera user_has_voted a cada sugerencia
+    const suggestionsWithVoteStatus = data.map(suggestion => ({
+      ...suggestion,
+      user_has_voted: votedSuggestionIds.has(suggestion.id)
+    }));
+
+    return { suggestions: suggestionsWithVoteStatus as Suggestion[], error: null };
+  } catch (error) {
+    console.error('Error inesperado al obtener sugerencias:', error);
+    return {
+      suggestions: [],
+      error: new Error('Ocurrió un error inesperado al obtener las sugerencias. Por favor, inténtalo de nuevo.')
+    };
   }
-
-  // Get all suggestions with the specified status
-  const { data, error } = await supabase
-    .from('suggestions')
-    .select('*, game_modes(name)')
-    .eq('status', status)
-    .order('created_at', { ascending: false });
-
-  if (error || !data) {
-    return { suggestions: [], error: error || new Error('Error al obtener sugerencias') };
-  }
-
-  // Check if the current user has voted for each suggestion
-  const { data: votes, error: votesError } = await supabase
-    .from('votes')
-    .select('suggestion_id')
-    .eq('user_id', user.id);
-
-  if (votesError) {
-    return { suggestions: [], error: votesError };
-  }
-
-  // Create a set of suggestion IDs that the user has voted for
-  const votedSuggestionIds = new Set((votes || []).map(vote => vote.suggestion_id));
-
-  // Add user_has_voted flag to each suggestion
-  const suggestionsWithVoteStatus = data.map(suggestion => ({
-    ...suggestion,
-    user_has_voted: votedSuggestionIds.has(suggestion.id)
-  }));
-
-  return { suggestions: suggestionsWithVoteStatus as Suggestion[], error: null };
 };
 
 export const voteSuggestion = async (suggestionId: number) => {
-  const { data: { user } } = await supabase.auth.getUser();
+  try {
+    console.log(`Iniciando votación para sugerencia ID: ${suggestionId}`);
 
-  if (!user) {
-    return { error: new Error('Usuario no autenticado') };
-  }
+    // Verificar que el usuario esté autenticado
+    const { data: { user } } = await supabase.auth.getUser();
 
-  // Start a transaction
-  const { error: voteError } = await supabase
-    .from('votes')
-    .insert({
-      suggestion_id: suggestionId,
-      user_id: user.id
-    });
-
-  if (voteError) {
-    if (voteError.code === '23505') { // Unique constraint violation
-      return { error: new Error('Ya has votado por esta sugerencia') };
+    if (!user) {
+      console.error('Error: Usuario no autenticado al intentar votar');
+      return { error: new Error('Usuario no autenticado'), success: false };
     }
-    return { error: voteError };
-  }
 
-  // First get the current votes count
-  const { data: currentData, error: getError } = await supabase
-    .from('suggestions')
-    .select('votes_count')
-    .eq('id', suggestionId)
-    .single();
-
-  if (getError) {
-    return { error: getError };
-  }
-
-  // Increment the votes_count in the suggestions table
-  const newVotesCount = (currentData.votes_count || 0) + 1;
-
-  const { data, error: updateError } = await supabase
-    .from('suggestions')
-    .update({ votes_count: newVotesCount })
-    .eq('id', suggestionId)
-    .select()
-    .single();
-
-  if (updateError) {
-    return { error: updateError };
-  }
-
-  // Check if the suggestion has reached the minimum votes required
-  const { data: settings, error: settingsError } = await supabase
-    .from('settings')
-    .select('value')
-    .eq('key', 'min_votes_required')
-    .single();
-
-  if (settingsError) {
-    return { error: settingsError };
-  }
-
-  const minVotesRequired = parseInt(settings.value, 10);
-
-  // If the suggestion has reached the minimum votes, approve it and add it to the questions table
-  if (data.votes_count >= minVotesRequired) {
-    // Update the suggestion status to approved
-    const { error: approveError } = await supabase
+    // Verificar primero que la sugerencia existe
+    const { data: suggestionExists, error: checkError } = await supabase
       .from('suggestions')
-      .update({ status: 'approved' })
+      .select('id, content, type, mode_id, votes_count')
       .eq('id', suggestionId);
 
-    if (approveError) {
-      return { error: approveError };
+    if (checkError) {
+      console.error(`Error al verificar la sugerencia ${suggestionId}:`, checkError);
+      return { error: checkError, success: false };
     }
 
-    // Add the suggestion to the questions table
-    const { error: addQuestionError } = await supabase
-      .from('questions')
+    if (!suggestionExists || suggestionExists.length === 0) {
+      console.error(`Error: La sugerencia con ID ${suggestionId} no existe`);
+      return { error: new Error(`La sugerencia con ID ${suggestionId} no existe`), success: false };
+    }
+
+    // Verificar si el usuario ya ha votado por esta sugerencia
+    const { data: existingVote, error: voteCheckError } = await supabase
+      .from('votes')
+      .select('id')
+      .eq('suggestion_id', suggestionId)
+      .eq('user_id', user.id);
+
+    if (voteCheckError) {
+      console.error('Error al verificar voto existente:', voteCheckError);
+      return { error: voteCheckError, success: false };
+    }
+
+    if (existingVote && existingVote.length > 0) {
+      console.log(`El usuario ${user.id} ya ha votado por la sugerencia ${suggestionId}`);
+      return { error: new Error('Ya has votado por esta sugerencia'), success: false };
+    }
+
+    // Obtener la sugerencia actual
+    const suggestion = suggestionExists[0];
+
+    // Registrar el voto
+    const { error: voteError } = await supabase
+      .from('votes')
       .insert({
-        content: data.content,
-        type: data.type,
-        mode_id: data.mode_id
+        suggestion_id: suggestionId,
+        user_id: user.id
       });
 
-    if (addQuestionError) {
-      return { error: addQuestionError };
+    if (voteError) {
+      console.error('Error al insertar voto:', voteError);
+      if (voteError.code === '23505') { // Unique constraint violation
+        return { error: new Error('Ya has votado por esta sugerencia'), success: false };
+      }
+      return { error: voteError, success: false };
     }
-  }
 
-  return { error: null };
+    console.log(`Voto registrado correctamente. El trigger actualizará el contador automáticamente.`);
+
+    // Esperar un momento más largo para asegurar que el trigger haya actualizado el contador
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    // Actualizar todos los contadores de votos mediante RPC
+    const { success, error: rpcError } = await updateAllVoteCounts();
+
+    if (rpcError) {
+      console.error('Error al actualizar contadores mediante RPC:', rpcError);
+
+      // Si falla el RPC, intentar actualizar manualmente solo esta sugerencia
+      const { data: votes, error: countError } = await supabase
+        .from('votes')
+        .select('id')
+        .eq('suggestion_id', suggestionId);
+
+      if (countError) {
+        console.error(`Error al contar votos para sugerencia ${suggestionId}:`, countError);
+        // Continuar con la sugerencia actualizada aunque falle el conteo
+      } else if (votes) {
+        // Actualizar el contador de votos con el número real de votos
+        const voteCount = votes.length;
+        console.log(`Sugerencia ${suggestionId}: ${voteCount} votos contados manualmente`);
+
+        // Actualizar el contador en la base de datos
+        const { error: updateError } = await supabase
+          .from('suggestions')
+          .update({ votes_count: voteCount })
+          .eq('id', suggestionId);
+
+        if (updateError) {
+          console.error(`Error al actualizar contador para sugerencia ${suggestionId}:`, updateError);
+        } else {
+          console.log(`Contador actualizado manualmente a ${voteCount} votos`);
+        }
+      }
+    } else {
+      console.log('Contadores de votos actualizados correctamente mediante RPC');
+    }
+
+    // Obtener la sugerencia actualizada después de insertar el voto y actualizar el contador
+    const { data: updatedSuggestion, error: updateError } = await supabase
+      .from('suggestions')
+      .select('*, game_modes(name)')
+      .eq('id', suggestionId)
+      .single();
+
+    if (updateError) {
+      console.error('Error al obtener la sugerencia actualizada:', updateError);
+      return { error: updateError, success: false };
+    }
+
+    // Verificar si el contador en la sugerencia actualizada es correcto
+    // Obtener el conteo actual de votos para esta sugerencia
+    const { data: currentVotes, error: finalCountError } = await supabase
+      .from('votes')
+      .select('id')
+      .eq('suggestion_id', suggestionId);
+
+    if (!finalCountError && currentVotes && updatedSuggestion) {
+      const voteCount = currentVotes.length;
+      if (updatedSuggestion.votes_count !== voteCount) {
+        console.log(`Corrigiendo contador en objeto de respuesta: ${updatedSuggestion.votes_count} -> ${voteCount}`);
+        updatedSuggestion.votes_count = voteCount;
+      }
+    }
+
+    // Obtener el conteo actualizado de votos
+    const currentVotesCount = updatedSuggestion?.votes_count || 0;
+
+    // Verificar si la sugerencia ha alcanzado los votos mínimos requeridos
+    const { data: settings, error: settingsError } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', 'min_votes_required');
+
+    if (settingsError) {
+      console.error('Error al obtener configuración de votos mínimos:', settingsError);
+      return { error: settingsError, success: false };
+    }
+
+    if (!settings || settings.length === 0) {
+      console.error('No se encontró la configuración de votos mínimos');
+      return { error: new Error('No se encontró la configuración de votos mínimos'), success: false };
+    }
+
+    const minVotesRequired = parseInt(settings[0].value, 10);
+    console.log(`Votos mínimos requeridos: ${minVotesRequired}, votos actuales: ${currentVotesCount}`);
+
+    // Si la sugerencia ha alcanzado los votos mínimos, aprobarla y añadirla a las preguntas
+    if (currentVotesCount >= minVotesRequired) {
+      console.log(`La sugerencia ${suggestionId} ha alcanzado los votos mínimos. Aprobando...`);
+
+      // Actualizar el estado de la sugerencia a aprobado
+      const { error: approveError } = await supabase
+        .from('suggestions')
+        .update({ status: 'approved' })
+        .eq('id', suggestionId);
+
+      if (approveError) {
+        console.error('Error al aprobar la sugerencia:', approveError);
+        return { error: approveError, success: false };
+      }
+
+      // Añadir la sugerencia a la tabla de preguntas
+      const { error: addQuestionError } = await supabase
+        .from('questions')
+        .insert({
+          content: suggestion.content,
+          type: suggestion.type,
+          mode_id: suggestion.mode_id
+        });
+
+      if (addQuestionError) {
+        console.error('Error al añadir la sugerencia como pregunta:', addQuestionError);
+        return { error: addQuestionError, success: false };
+      }
+
+      console.log(`Sugerencia ${suggestionId} aprobada y añadida como pregunta correctamente`);
+    }
+
+    console.log(`Voto registrado correctamente para la sugerencia ${suggestionId}`);
+    return {
+      error: null,
+      success: true,
+      suggestion: updatedSuggestion
+    };
+  } catch (error) {
+    console.error('Error inesperado al votar por sugerencia:', error);
+    return {
+      error: new Error('Ocurrió un error inesperado al procesar tu voto. Por favor, inténtalo de nuevo.'),
+      success: false
+    };
+  }
 };
 
 export const getSettings = async (key: string) => {
@@ -556,4 +718,28 @@ export const getSettings = async (key: string) => {
   }
 
   return { value: data.value, error: null };
+};
+
+// Función para actualizar todos los contadores de votos utilizando el endpoint RPC
+export const updateAllVoteCounts = async () => {
+  try {
+    console.log('Actualizando todos los contadores de votos mediante RPC...');
+
+    const { data, error } = await supabase
+      .rpc('update_vote_counts');
+
+    if (error) {
+      console.error('Error al actualizar contadores de votos mediante RPC:', error);
+      return { success: false, error };
+    }
+
+    console.log('Contadores de votos actualizados correctamente mediante RPC:', data);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error inesperado al actualizar contadores de votos:', error);
+    return {
+      success: false,
+      error: new Error('Ocurrió un error inesperado al actualizar los contadores de votos.')
+    };
+  }
 };
