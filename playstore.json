@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "drinkapp-458004",
+  "private_key_id": "b6c3f93804e1849a22419d1b0e08d81eb4d3f93f",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCoHRuFq8Z4VuQs\nQKuAWcWyKGygLqaZmwESdQoCwO5zXst/YLaUESh3OQysohNJARTaBuSC3Z2IsxAS\nDGAZ9Eu8R6D+ZYSj3TA7AdpOg/Bnlf31E6adj5F0VOWhZ4st6gImqmp/V1H5/yZc\nxGVOq4hf+uFz2pcIPF41LcbaZkiNved2NYLasnA4en+7/Uov5Z6fG8v0LdQOkh1R\nswiFdpidu3Ymbj0d/s88TA+mgroTbgn1JiyYhWBT/4bvgvVxp0EBcgYWOjqbRz8+\nbnixMvRoR5O/fAwJp+dCLbCBV/RUUQoDNQCbLsiZ0cWNR+Wdtwl1QueyYWOA31HT\nVXS0yQTXAgMBAAECggEAUd4S6A6V0UanSTGZEyEkmDT9aSgus4D7jax3Wo3v0Tkp\nqndDkmmkpiKfHHa1I4kmSWKv51ba/5YLzm4+YoVIWIEdUqXHaTEu6p1lXXT9HsS5\nbp7KNdKTh+5MAUT2Tz61G3VD9Y1le3QYj3aIyz3XZL49Cnk5saYMTqNjQjorPPKi\n9C8Y2Upqny79PV5Tf5QCKBztfmOOBuYJO5X5g5H1ksq1eKhHrIWl8VPB/aZRmBz9\nr7c/P/x/Cnzo8Daj9XITNf2XcJdY3BXnoU2WSbvCGlmVM78dikrkBpDHH8LXDuiZ\nYJl1HvUanMRNEl40Z+HpY/OspvdvrlhWDBGQyUtl0QKBgQDRb+sdQapKMVGFZAPx\nExg8wpcw3ZcYhKFl55zCLjG5H1CqgJK2GD/jDiI9LUuc03p6T7Nzx9WDhYOyMaCh\nCER2QcRSkTpyGi0gO2vJcSNIg65jkITpXFAyP2LGskfqZ65B6cmhi8SR0MuACKbm\nNftxtJeb3BkKj+EMLtyfQv2pnwKBgQDNfUUuyPsnnIMLtwWfK97IWUG0CC6g89x0\nHmFYaqL+bxor1iG6LQgUyMzu0UlorcAZF/4wTHc9alJyGD9cBe/+adgXJIdS2jJS\n3iq44ZoYsW7Y6sH1vQ2KHgjZKxdlUCix71Eguzixo/+0EgSsGGAdmOQVDez6w9VJ\nvPTFqu/JyQKBgCfcLho2WiuesU4618k1AiLmQhIpykz/SRx09U+7rPj3rcmViNah\nTN9w3DFago6JbUEEFDpP6SIL8iGi8lhTk3wSTkQModv/gWEmDgCbyMRPU4xdf/5N\n9HFrwOfiHG/PZcnjrd1SFYpO+7wVaXZdBcsBPO2L+TQaaBGChbjF7jMvAoGBAKKy\nSYF2bax6NiOjYFcbVAPK78OMKucSzXw+xZJMtArBirYkj4Wpu9lA90kq+XVhBFSZ\n847oLAy7TtW5Lwk8Rj1oLkh8ioxl6CxGbQr+zJQ6f+pNTQ61BbBSgWz4ukhkBCSF\nt/UzZvr3PzCih4J+tjMY55Vn9jbBsPD2I9MRuVNJAoGBAI5DOAYc3m+Bb3oegbPO\n+i11Vnl65TqjPoyGiFu1mAwKqjA6lex5i0BUixm2caQWe8MUUXvW6B5MPKrlj5LL\n7P+Ak6N1jxrMXOW2g83jhfWF4cYtUPjMgHjL4C42lWv5orbbSEEvtwLJoRh4Sans\ntaOwp7UngsHXn3u5jLWJWDCz\n-----END PRIVATE KEY-----\n",
+  "client_email": "playstore@drinkapp-458004.iam.gserviceaccount.com",
+  "client_id": "105518781225575735381",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/playstore%40drinkapp-458004.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
