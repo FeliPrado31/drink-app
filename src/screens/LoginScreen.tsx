@@ -132,10 +132,14 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
       </View>
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
         style={styles.keyboardContainer}
       >
-        <ScrollView contentContainerStyle={styles.scrollContainer}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContainer}
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={styles.formContainer}>
             <Text style={styles.title}>{isLogin ? 'Iniciar Sesión' : 'Registrarse'}</Text>
 
@@ -208,8 +212,8 @@ const styles = StyleSheet.create({
   },
   headerContainer: {
     alignItems: 'center',
-    paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 40 : 60,
-    paddingBottom: 30,
+    paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 20 : 40,
+    paddingBottom: 20,
   },
   logoContainer: {
     width: 120,
@@ -235,8 +239,9 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     flexGrow: 1,
-    justifyContent: 'center',
     padding: 20,
+    paddingTop: 20,
+    paddingBottom: 40,
   },
   formContainer: {
     backgroundColor: 'white',
