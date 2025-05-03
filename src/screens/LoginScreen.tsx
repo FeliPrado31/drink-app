@@ -27,18 +27,36 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const [initialLoading, setInitialLoading] = useState(true);
 
   // Usar el contexto de autenticación optimizado
-  const { signIn, signUp, loading, user } = useAuth();
+  const { signIn, signUp, loading, user, refreshSession } = useAuth();
 
   // Verificar si el usuario ya está autenticado
   useEffect(() => {
-    // Si hay un usuario autenticado, navegar a Home
-    if (user) {
-      navigation.navigate('Home');
-    }
+    const checkAuth = async () => {
+      try {
+        // Si hay un usuario autenticado, navegar a Home
+        if (user) {
+          console.log('Usuario ya autenticado, redirigiendo a Home');
+          navigation.navigate('Home');
+        } else {
+          // Intentar refrescar la sesión para verificar si hay una sesión persistente
+          await refreshSession();
 
-    // Finalizar la carga inicial
-    setInitialLoading(false);
-  }, [user, navigation]);
+          // Verificar nuevamente después de refrescar
+          if (user) {
+            console.log('Sesión recuperada después de refrescar, redirigiendo a Home');
+            navigation.navigate('Home');
+          }
+        }
+      } catch (error) {
+        console.error('Error al verificar autenticación:', error);
+      } finally {
+        // Finalizar la carga inicial
+        setInitialLoading(false);
+      }
+    };
+
+    checkAuth();
+  }, [user, navigation, refreshSession]);
 
   const handleAuth = async () => {
     if (!email || !password) {
@@ -107,6 +125,21 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
       console.warn('Por favor revisa la consola para ver detalles del error de autenticación');
     }
   };
+
+  // Mostrar un indicador de carga mientras se verifica la sesión
+  if (initialLoading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <StatusBar barStyle="light-content" backgroundColor="#ff5722" />
+        <LinearGradient
+          colors={['#ff5722', '#ff9800']}
+          style={styles.background}
+        />
+        <ActivityIndicator size="large" color="white" />
+        <Text style={styles.loadingText}>Verificando sesión...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -285,6 +318,17 @@ const styles = StyleSheet.create({
     color: '#ff5722',
     fontSize: 16,
     fontWeight: '500',
+  },
+  // Estilos para la pantalla de carga
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '500',
+    marginTop: 20,
   },
 });
 

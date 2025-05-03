@@ -20,7 +20,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     debug: false, // Disable debug logs for production
     flowType: 'implicit', // Use implicit flow for better mobile performance
     // Set a longer storage key refresh time to reduce frequent checks
-    storageKey: 'supabase-auth-token',
+    storageKey: 'supabase-auth-token'
   },
   // Global settings to improve performance
   global: {
