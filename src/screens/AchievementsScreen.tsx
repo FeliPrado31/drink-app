@@ -9,10 +9,13 @@ import {
   TouchableOpacity,
   Switch,
   Alert,
-  ScrollView
+  ScrollView,
+  StatusBar
 } from 'react-native';
 import { useAchievements } from '../context/AchievementsContext';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import BackButton from '../components/BackButton';
 
 type AchievementsScreenProps = {
   navigation: any;
@@ -323,6 +326,23 @@ const AchievementsScreen: React.FC<AchievementsScreenProps> = ({ navigation }) =
 
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#ff5722" />
+
+      {/* Header con gradiente */}
+      <LinearGradient
+        colors={['#ff5722', '#ff9800']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.header}
+      >
+        <View style={styles.headerTop}>
+          <BackButton onPress={() => navigation.goBack()} color="white" />
+        </View>
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.headerTitle}>Mis Logros</Text>
+        </View>
+      </LinearGradient>
+
       <View style={styles.contentContainer}>
         {/* Tabs para cambiar entre logros y estadísticas */}
         <View style={styles.tabContainer}>
@@ -358,8 +378,6 @@ const AchievementsScreen: React.FC<AchievementsScreenProps> = ({ navigation }) =
         {selectedTab === 'achievements' && (
           <>
             <View style={styles.headerContainer}>
-              <Text style={styles.title}>Mis Logros</Text>
-
               <View style={styles.secretToggleContainer}>
                 <Text style={styles.secretToggleLabel}>
                   Mostrar secretos
@@ -409,6 +427,26 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  header: {
+    paddingTop: (StatusBar.currentHeight || 40) + 15, // Añadimos 15px extra de espacio
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    justifyContent: 'space-between',
+  },
+  headerTitleContainer: {
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: 'white',
+    textAlign: 'center',
   },
   contentContainer: {
     flex: 1,

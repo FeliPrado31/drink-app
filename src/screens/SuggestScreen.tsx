@@ -7,12 +7,15 @@ import {
   Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  StatusBar
 } from 'react-native';
 import { Button, Input } from 'react-native-elements';
 import { Picker } from '@react-native-picker/picker';
 import { createSuggestion, getGameModes, GameMode, getSettings } from '../services/supabase';
 import { useAchievements } from '../context/AchievementsContext';
+import { LinearGradient } from 'expo-linear-gradient';
+import BackButton from '../components/BackButton';
 
 type SuggestScreenProps = {
   navigation: any;
@@ -106,13 +109,29 @@ const SuggestScreen: React.FC<SuggestScreenProps> = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#ff5722" />
+
+      {/* Header con gradiente */}
+      <LinearGradient
+        colors={['#ff5722', '#ff9800']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.header}
+      >
+        <View style={styles.headerTop}>
+          <BackButton onPress={() => navigation.goBack()} color="white" />
+        </View>
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.headerTitle}>Sugerir Nueva Pregunta/Reto</Text>
+        </View>
+      </LinearGradient>
+
       <KeyboardAvoidingView
         style={styles.keyboardContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={100}
       >
         <ScrollView contentContainerStyle={styles.scrollContainer}>
-          <Text style={styles.title}>Sugerir Nueva Pregunta/Reto</Text>
 
           <View style={styles.formContainer}>
             <Text style={styles.label}>Modo de Juego:</Text>
@@ -182,6 +201,26 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
+  header: {
+    paddingTop: (StatusBar.currentHeight || 40) + 15, // Añadimos 15px extra de espacio
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    justifyContent: 'space-between',
+  },
+  headerTitleContainer: {
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: 'white',
+    textAlign: 'center',
+  },
   keyboardContainer: {
     flex: 1,
   },
@@ -200,12 +239,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
+
   formContainer: {
     backgroundColor: 'white',
     borderRadius: 10,

@@ -13,6 +13,7 @@ import {
 import { Button, Input, Icon } from 'react-native-elements';
 import { Player } from '../services/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
+import BackButton from '../components/BackButton';
 
 type PlayersScreenProps = {
   navigation: any;
@@ -111,8 +112,13 @@ const PlayersScreen: React.FC<PlayersScreenProps> = ({ navigation, route }) => {
         end={{ x: 1, y: 0 }}
         style={styles.header}
       >
-        <Text style={styles.headerTitle}>Agregar Jugadores</Text>
-        <Text style={styles.headerSubtitle}>Modo: {modeName}</Text>
+        <View style={styles.headerTop}>
+          <BackButton onPress={() => navigation.goBack()} color="white" />
+        </View>
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.headerTitle}>Agregar Jugadores</Text>
+          <Text style={styles.headerSubtitle}>Modo: {modeName}</Text>
+        </View>
       </LinearGradient>
 
       <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -252,19 +258,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
   },
   header: {
-    paddingTop: StatusBar.currentHeight || 40,
+    paddingTop: (StatusBar.currentHeight || 40) + 15, // Añadimos 15px extra de espacio
     paddingBottom: 20,
     paddingHorizontal: 20,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    justifyContent: 'space-between',
+  },
+  headerTitleContainer: {
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
     color: 'white',
     marginBottom: 4,
+    textAlign: 'center',
   },
   headerSubtitle: {
     fontSize: 16,
     color: 'rgba(255,255,255,0.8)',
+    textAlign: 'center',
   },
   scrollContent: {
     flex: 1,

@@ -334,7 +334,7 @@ const styles = StyleSheet.create({
   },
   // Header
   header: {
-    paddingTop: StatusBar.currentHeight || 40,
+    paddingTop: (StatusBar.currentHeight || 40) + 15, // Añadimos 15px extra de espacio
     paddingBottom: 20,
     paddingHorizontal: 20,
   },

@@ -12,6 +12,7 @@ import {
 import { Icon } from 'react-native-elements';
 import { getGameModes, GameMode } from '../services/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
+import BackButton from '../components/BackButton';
 
 type GameModeScreenProps = {
   navigation: any;
@@ -74,8 +75,13 @@ const GameModeScreen: React.FC<GameModeScreenProps> = ({ navigation }) => {
         end={{ x: 1, y: 0 }}
         style={styles.header}
       >
-        <Text style={styles.headerTitle}>Selecciona el Modo</Text>
-        <Text style={styles.headerSubtitle}>Elige cómo quieres jugar</Text>
+        <View style={styles.headerTop}>
+          <BackButton onPress={() => navigation.goBack()} color="white" />
+        </View>
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.headerTitle}>Selecciona el Modo</Text>
+          <Text style={styles.headerSubtitle}>Elige cómo quieres jugar</Text>
+        </View>
       </LinearGradient>
 
       {loading ? (
@@ -145,19 +151,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
   },
   header: {
-    paddingTop: StatusBar.currentHeight || 40,
+    paddingTop: (StatusBar.currentHeight || 40) + 15, // Añadimos 15px extra de espacio
     paddingBottom: 20,
     paddingHorizontal: 20,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    justifyContent: 'space-between',
+  },
+  headerTitleContainer: {
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
     color: 'white',
     marginBottom: 4,
+    textAlign: 'center',
   },
   headerSubtitle: {
     fontSize: 16,
     color: 'rgba(255,255,255,0.8)',
+    textAlign: 'center',
   },
   centerContainer: {
     flex: 1,

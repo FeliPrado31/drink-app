@@ -6,17 +6,20 @@ import {
   ScrollView,
   ActivityIndicator,
   TouchableOpacity,
-  RefreshControl
+  RefreshControl,
+  StatusBar
 } from 'react-native';
 import { getPlayerStats, PlayerStats } from '../services/achievements';
 import { getUserAchievements, UserAchievement } from '../services/achievements';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import BackButton from '../components/BackButton';
 
 type StatsScreenProps = {
   navigation: any;
 };
 
-const StatsScreen: React.FC<StatsScreenProps> = () => {
+const StatsScreen: React.FC<StatsScreenProps> = ({ navigation }) => {
   const [stats, setStats] = useState<PlayerStats | null>(null);
   const [achievements, setAchievements] = useState<UserAchievement[]>([]);
   const [loading, setLoading] = useState(true);
@@ -350,45 +353,100 @@ const StatsScreen: React.FC<StatsScreenProps> = () => {
 
   if (loading && !refreshing) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#ff5722" />
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#ff5722" />
+
+        {/* Header con gradiente */}
+        <LinearGradient
+          colors={['#ff5722', '#ff9800']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.header}
+        >
+          <View style={styles.headerTop}>
+            <BackButton onPress={() => navigation.goBack()} color="white" />
+          </View>
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerTitle}>Mis Estadísticas</Text>
+          </View>
+        </LinearGradient>
+
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#ff5722" />
+        </View>
       </View>
     );
   }
 
   if (error) {
     return (
-      <View style={styles.centerContainer}>
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity
-          style={styles.retryButton}
-          onPress={fetchStats}
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#ff5722" />
+
+        {/* Header con gradiente */}
+        <LinearGradient
+          colors={['#ff5722', '#ff9800']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.header}
         >
-          <Text style={styles.retryButtonText}>Reintentar</Text>
-        </TouchableOpacity>
+          <View style={styles.headerTop}>
+            <BackButton onPress={() => navigation.goBack()} color="white" />
+          </View>
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerTitle}>Mis Estadísticas</Text>
+          </View>
+        </LinearGradient>
+
+        <View style={styles.centerContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={fetchStats}
+          >
+            <Text style={styles.retryButtonText}>Reintentar</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          colors={['#ff5722']}
-        />
-      }
-    >
-      <View style={styles.contentContainer}>
-        <Text style={styles.title}>Mis Estadísticas</Text>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#ff5722" />
 
-        {renderTabs()}
+      {/* Header con gradiente */}
+      <LinearGradient
+        colors={['#ff5722', '#ff9800']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.header}
+      >
+        <View style={styles.headerTop}>
+          <BackButton onPress={() => navigation.goBack()} color="white" />
+        </View>
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.headerTitle}>Mis Estadísticas</Text>
+        </View>
+      </LinearGradient>
+
+      <ScrollView
+        style={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#ff5722']}
+          />
+        }
+      >
+        <View style={styles.contentContainer}>
+          {renderTabs()}
 
         {renderActiveTab()}
       </View>
     </ScrollView>
+    </View>
   );
 };
 
@@ -396,6 +454,29 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  header: {
+    paddingTop: (StatusBar.currentHeight || 40) + 15, // Añadimos 15px extra de espacio
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    justifyContent: 'space-between',
+  },
+  headerTitleContainer: {
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: 'white',
+    textAlign: 'center',
+  },
+  scrollContent: {
+    flex: 1,
   },
   contentContainer: {
     padding: 16,
@@ -405,14 +486,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#f5f5f5',
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
+
   tabsContainer: {
     flexDirection: 'row',
     marginBottom: 16,

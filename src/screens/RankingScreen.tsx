@@ -6,10 +6,13 @@ import {
   FlatList,
   ActivityIndicator,
   TouchableOpacity,
-  RefreshControl
+  RefreshControl,
+  StatusBar
 } from 'react-native';
 import { getGlobalRanking, RankingEntry, getUserRankingPosition } from '../services/ranking';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import BackButton from '../components/BackButton';
 
 type RankingScreenProps = {
   navigation: any;
@@ -26,21 +29,21 @@ const RankingScreen: React.FC<RankingScreenProps> = ({ navigation }) => {
   const fetchRanking = async () => {
     try {
       setLoading(true);
-      
+
       // Obtener el ranking global
       const { ranking, error } = await getGlobalRanking(100, category);
-      
+
       if (error) throw error;
-      
+
       setRanking(ranking || []);
-      
+
       // Obtener la posición del usuario
       const { position, error: posError } = await getUserRankingPosition(category);
-      
+
       if (!posError) {
         setUserPosition(position);
       }
-      
+
       setError(null);
     } catch (err: any) {
       setError(err.message || 'Error al cargar el ranking');
@@ -88,7 +91,7 @@ const RankingScreen: React.FC<RankingScreenProps> = ({ navigation }) => {
   const renderRankingItem = ({ item, index }: { item: RankingEntry; index: number }) => {
     const isTop3 = index < 3;
     const isCurrentUser = userPosition === item.rank;
-    
+
     return (
       <View style={[
         styles.rankingItem,
@@ -106,7 +109,7 @@ const RankingScreen: React.FC<RankingScreenProps> = ({ navigation }) => {
             {item.rank}
           </Text>
         </View>
-        
+
         <View style={styles.userInfo}>
           <Text style={[
             styles.username,
@@ -115,25 +118,25 @@ const RankingScreen: React.FC<RankingScreenProps> = ({ navigation }) => {
             {item.username}
             {isCurrentUser && ' (Tú)'}
           </Text>
-          
+
           <View style={styles.scoreBreakdown}>
             <View style={styles.scoreItem}>
               <Ionicons name="trophy" size={12} color="#ffd700" />
               <Text style={styles.scoreText}>{item.achievements_score}</Text>
             </View>
-            
+
             <View style={styles.scoreItem}>
               <Ionicons name="game-controller" size={12} color="#2196f3" />
               <Text style={styles.scoreText}>{item.games_score}</Text>
             </View>
-            
+
             <View style={styles.scoreItem}>
               <Ionicons name="people" size={12} color="#4caf50" />
               <Text style={styles.scoreText}>{item.social_score}</Text>
             </View>
           </View>
         </View>
-        
+
         <View style={styles.scoreContainer}>
           <Text style={[
             styles.scoreValue,
@@ -154,52 +157,52 @@ const RankingScreen: React.FC<RankingScreenProps> = ({ navigation }) => {
         style={[styles.tab, category === 'total' && styles.activeTab]}
         onPress={() => setCategory('total')}
       >
-        <Ionicons 
-          name="stats-chart" 
-          size={20} 
-          color={category === 'total' ? '#ff5722' : '#757575'} 
+        <Ionicons
+          name="stats-chart"
+          size={20}
+          color={category === 'total' ? '#ff5722' : '#757575'}
         />
         <Text style={[styles.tabText, category === 'total' && styles.activeTabText]}>
           Total
         </Text>
       </TouchableOpacity>
-      
+
       <TouchableOpacity
         style={[styles.tab, category === 'achievements' && styles.activeTab]}
         onPress={() => setCategory('achievements')}
       >
-        <Ionicons 
-          name="trophy" 
-          size={20} 
-          color={category === 'achievements' ? '#ff5722' : '#757575'} 
+        <Ionicons
+          name="trophy"
+          size={20}
+          color={category === 'achievements' ? '#ff5722' : '#757575'}
         />
         <Text style={[styles.tabText, category === 'achievements' && styles.activeTabText]}>
           Logros
         </Text>
       </TouchableOpacity>
-      
+
       <TouchableOpacity
         style={[styles.tab, category === 'games' && styles.activeTab]}
         onPress={() => setCategory('games')}
       >
-        <Ionicons 
-          name="game-controller" 
-          size={20} 
-          color={category === 'games' ? '#ff5722' : '#757575'} 
+        <Ionicons
+          name="game-controller"
+          size={20}
+          color={category === 'games' ? '#ff5722' : '#757575'}
         />
         <Text style={[styles.tabText, category === 'games' && styles.activeTabText]}>
           Juegos
         </Text>
       </TouchableOpacity>
-      
+
       <TouchableOpacity
         style={[styles.tab, category === 'social' && styles.activeTab]}
         onPress={() => setCategory('social')}
       >
-        <Ionicons 
-          name="people" 
-          size={20} 
-          color={category === 'social' ? '#ff5722' : '#757575'} 
+        <Ionicons
+          name="people"
+          size={20}
+          color={category === 'social' ? '#ff5722' : '#757575'}
         />
         <Text style={[styles.tabText, category === 'social' && styles.activeTabText]}>
           Social
@@ -210,36 +213,89 @@ const RankingScreen: React.FC<RankingScreenProps> = ({ navigation }) => {
 
   if (loading && !refreshing) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#ff5722" />
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#ff5722" />
+
+        {/* Header con gradiente */}
+        <LinearGradient
+          colors={['#ff5722', '#ff9800']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.header}
+        >
+          <View style={styles.headerTop}>
+            <BackButton onPress={() => navigation.goBack()} color="white" />
+          </View>
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerTitle}>Ranking Global</Text>
+          </View>
+        </LinearGradient>
+
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#ff5722" />
+        </View>
       </View>
     );
   }
 
   if (error) {
     return (
-      <View style={styles.centerContainer}>
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity
-          style={styles.retryButton}
-          onPress={fetchRanking}
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#ff5722" />
+
+        {/* Header con gradiente */}
+        <LinearGradient
+          colors={['#ff5722', '#ff9800']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.header}
         >
-          <Text style={styles.retryButtonText}>Reintentar</Text>
-        </TouchableOpacity>
+          <View style={styles.headerTop}>
+            <BackButton onPress={() => navigation.goBack()} color="white" />
+          </View>
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerTitle}>Ranking Global</Text>
+          </View>
+        </LinearGradient>
+
+        <View style={styles.centerContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={fetchRanking}
+          >
+            <Text style={styles.retryButtonText}>Reintentar</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#ff5722" />
+
+      {/* Header con gradiente */}
+      <LinearGradient
+        colors={['#ff5722', '#ff9800']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.header}
+      >
+        <View style={styles.headerTop}>
+          <BackButton onPress={() => navigation.goBack()} color="white" />
+        </View>
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.headerTitle}>Ranking Global</Text>
+        </View>
+      </LinearGradient>
+
       <View style={styles.contentContainer}>
-        <Text style={styles.title}>Ranking Global</Text>
-        
         {renderCategoryTabs()}
-        
+
         <View style={styles.categoryHeader}>
           <Text style={styles.categoryTitle}>Categoría: {getCategoryName()}</Text>
-          
+
           {userPosition && (
             <View style={styles.userPositionContainer}>
               <Text style={styles.userPositionText}>
@@ -248,7 +304,7 @@ const RankingScreen: React.FC<RankingScreenProps> = ({ navigation }) => {
             </View>
           )}
         </View>
-        
+
         {ranking.length > 0 ? (
           <FlatList
             data={ranking}
@@ -282,6 +338,26 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
+  header: {
+    paddingTop: (StatusBar.currentHeight || 40) + 15, // Añadimos 15px extra de espacio
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    justifyContent: 'space-between',
+  },
+  headerTitleContainer: {
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: 'white',
+    textAlign: 'center',
+  },
   contentContainer: {
     flex: 1,
     padding: 16,
@@ -291,13 +367,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#f5f5f5',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    textAlign: 'center',
   },
   tabsContainer: {
     flexDirection: 'row',

@@ -16,6 +16,7 @@ import { useAchievements } from '../context/AchievementsContext';
 import { useLevel } from '../context/LevelContext';
 import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
+import BackButton from '../components/BackButton';
 
 type GameScreenProps = {
   navigation: any;
@@ -557,7 +558,12 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation, route }) => {
         end={{ x: 1, y: 0 }}
         style={styles.header}
       >
-        <Text style={styles.headerTitle}>Modo {modeName}</Text>
+        <View style={styles.headerTop}>
+          <BackButton onPress={() => navigation.goBack()} color="white" />
+        </View>
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.headerTitle}>Modo {modeName}</Text>
+        </View>
 
         <Animated.View
           style={[
@@ -855,15 +861,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
   },
   header: {
-    paddingTop: StatusBar.currentHeight || 40,
+    paddingTop: (StatusBar.currentHeight || 40) + 15, // Añadimos 15px extra de espacio
     paddingBottom: 20,
     paddingHorizontal: 20,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    justifyContent: 'space-between',
+  },
+  headerTitleContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     color: 'white',
-    marginBottom: 16,
     textAlign: 'center',
   },
   playerInfoContainer: {

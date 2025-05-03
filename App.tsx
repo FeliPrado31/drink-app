@@ -100,92 +100,24 @@ export default function App() {
               <AchievementsProvider>
                 <LevelProvider>
                   <NavigationContainer>
-                  <Stack.Navigator initialRouteName="Login">
-                <Stack.Screen
-                  name="Login"
-                  component={LoginScreen}
-                  options={{ headerShown: false }}
-                />
-                <Stack.Screen
-                  name="Home"
-                  component={HomeScreen}
-                  options={{
-                    title: 'Drink App',
-                    headerBackVisible: false,
-                  }}
-                />
-                <Stack.Screen
-                  name="GameMode"
-                  component={GameModeScreen}
-                  options={{
-                    title: 'Seleccionar Modo',
-                    headerBackTitle: 'Inicio',
-                  }}
-                />
-                <Stack.Screen
-                  name="Players"
-                  component={PlayersScreen}
-                  options={{
-                    title: 'Agregar Jugadores',
-                    headerBackTitle: 'Modos',
-                  }}
-                />
-                <Stack.Screen
-                  name="Game"
-                  component={GameScreen}
-                  options={({ route }: any) => ({
-                    title: route.params?.modeName ? `Modo ${route.params.modeName}` : 'Juego',
-                    headerBackTitle: 'Jugadores',
-                  })}
-                />
-                <Stack.Screen
-                  name="Suggest"
-                  component={SuggestScreen}
-                  options={{
-                    title: 'Sugerir Pregunta/Reto',
-                    headerBackTitle: 'Inicio',
-                  }}
-                />
-                <Stack.Screen
-                  name="Vote"
-                  component={VoteScreen}
-                  options={{
-                    title: 'Votar Sugerencias',
-                    headerBackTitle: 'Inicio',
-                  }}
-                />
-                <Stack.Screen
-                  name="Achievements"
-                  component={AchievementsScreen}
-                  options={{
-                    title: 'Mis Logros',
-                    headerBackTitle: 'Inicio',
-                  }}
-                />
-                <Stack.Screen
-                  name="Level"
-                  component={LevelScreen}
-                  options={{
-                    title: 'Mi Nivel',
-                    headerBackTitle: 'Inicio',
-                  }}
-                />
-                <Stack.Screen
-                  name="Ranking"
-                  component={RankingScreen}
-                  options={{
-                    title: 'Ranking Global',
-                    headerBackTitle: 'Nivel',
-                  }}
-                />
-                <Stack.Screen
-                  name="Stats"
-                  component={StatsScreen}
-                  options={{
-                    title: 'Estadísticas',
-                    headerBackTitle: 'Inicio',
-                  }}
-                />
+                  <Stack.Navigator
+                    initialRouteName="Login"
+                    screenOptions={{
+                      headerShown: false,
+                      contentStyle: { backgroundColor: '#f5f5f5' }
+                    }}
+                  >
+                    <Stack.Screen name="Login" component={LoginScreen} />
+                    <Stack.Screen name="Home" component={HomeScreen} />
+                    <Stack.Screen name="GameMode" component={GameModeScreen} />
+                    <Stack.Screen name="Players" component={PlayersScreen} />
+                    <Stack.Screen name="Game" component={GameScreen} />
+                    <Stack.Screen name="Suggest" component={SuggestScreen} />
+                    <Stack.Screen name="Vote" component={VoteScreen} />
+                    <Stack.Screen name="Achievements" component={AchievementsScreen} />
+                    <Stack.Screen name="Level" component={LevelScreen} />
+                    <Stack.Screen name="Ranking" component={RankingScreen} />
+                    <Stack.Screen name="Stats" component={StatsScreen} />
               </Stack.Navigator>
                 <StatusBar style="auto" />
               </NavigationContainer>

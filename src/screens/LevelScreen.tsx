@@ -7,12 +7,15 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   RefreshControl,
-  Alert
+  Alert,
+  StatusBar
 } from 'react-native';
 import { useLevel } from '../context/LevelContext';
 import { useAuth } from '../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { ProgressBar } from 'react-native-paper';
+import { LinearGradient } from 'expo-linear-gradient';
+import BackButton from '../components/BackButton';
 
 type LevelScreenProps = {
   navigation: any;
@@ -152,17 +155,35 @@ const LevelScreen: React.FC<LevelScreenProps> = ({ navigation }) => {
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          colors={['#ff5722']}
-        />
-      }
-    >
-      <View style={styles.contentContainer}>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#ff5722" />
+
+      {/* Header con gradiente */}
+      <LinearGradient
+        colors={['#ff5722', '#ff9800']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.header}
+      >
+        <View style={styles.headerTop}>
+          <BackButton onPress={() => navigation.goBack()} color="white" />
+        </View>
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.headerTitle}>Mi Nivel</Text>
+        </View>
+      </LinearGradient>
+
+      <ScrollView
+        style={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#ff5722']}
+          />
+        }
+      >
+        <View style={styles.contentContainer}>
         {/* Tarjeta de nivel */}
         <View style={styles.levelCard}>
           <View style={styles.levelHeader}>
@@ -266,6 +287,7 @@ const LevelScreen: React.FC<LevelScreenProps> = ({ navigation }) => {
         </View>
       </View>
     </ScrollView>
+    </View>
   );
 };
 
@@ -273,6 +295,29 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  header: {
+    paddingTop: (StatusBar.currentHeight || 40) + 15, // Añadimos 15px extra de espacio
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    justifyContent: 'space-between',
+  },
+  headerTitleContainer: {
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: 'white',
+    textAlign: 'center',
+  },
+  scrollContent: {
+    flex: 1,
   },
   contentContainer: {
     padding: 16,
