@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "drink",
+    "name": "Drink App",
     "slug": "drink-app",
     "version": "1.0.1",
     "orientation": "portrait",
@@ -34,7 +34,8 @@
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION"
-      ]
+      ],
+      "versionCode": 2
     },
     "web": {
       "favicon": "./assets/favicon.png"
